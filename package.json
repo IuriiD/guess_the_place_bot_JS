@@ -1,0 +1,39 @@
+{
+  "name": "guess_the_place_botjs",
+  "version": "1.0.0",
+  "description": "Telegram chatbot that presents images from Google Street View for a given city and asks to identify the place. Dialogflow (NLU, conversation constructor), NodeJS (webhooks, hosted on AWS Lambda), PostgreSQL+sequelizejs for storing data, Telegram Bot API",
+  "main": "gtpb.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/IuriiD/guess_the_place_bot_JS.git"
+  },
+  "keywords": [
+    "bot",
+    "chatbot",
+    "telegram",
+    "bot",
+    "api",
+    "google",
+    "street",
+    "view",
+    "nodejs",
+    "dialogflow",
+    "aws",
+    "aws",
+    "lambda",
+    "postgresql",
+    "sequelizejs"
+  ],
+  "author": "Iurii Dziuban - iurii.dziuban@gmail.com",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/IuriiD/guess_the_place_bot_JS/issues"
+  },
+  "homepage": "https://github.com/IuriiD/guess_the_place_bot_JS#readme",
+  "dependencies": {
+    "telegraf": "^3.22.2"
+  }
+}
