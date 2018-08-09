@@ -40,7 +40,7 @@ bot.command(['start', 'restart'], async ctx => {
 
 
 bot.on('message', async ctx => {
-    console.log(state);
+
 
     const userId = ctx.from.id;
 
@@ -48,32 +48,43 @@ bot.on('message', async ctx => {
         // User is supposed to have entered some city
         // Let's pass his message to Google Maps Geocoding API to confirm it
         // https://developers.google.com/maps/documentation/geocoding/intro
+        // >> SUPPOSED/CORRECT/MAIN CONVERSATION FLOW
         if (state[userId]['should be'] === 'choosing city') {
             let cityOfInterest = await placeSearch(ctx.update.message.text);
 
             if (cityOfInterest.status === 'ok') {
+                await ctx.replyWithPhoto(`https://maps.googleapis.com/maps/api/staticmap?center=${cityOfInterest.payload.latitude},${cityOfInterest.payload.longitude}&zoom=12&size=400x400&key=${keys.GOOGLE_MAPS_API_KEY}`);
+
                 await ctx.replyWithHTML(`Do you mean <b>${cityOfInterest.payload.city}</b>?`, Markup
                     .keyboard(['Right!', 'No - I\'ll enter another one'])
                     .oneTime()
                     .resize()
                     .extra()
                 );
+
+                state[userId] = {
+                    'should be': 'confirming city',
+                    'bounds': cityOfInterest.payload.bounds
+                };
+
             } else {
-                await ctx.reply(`Sorry but I failed to determine what is "${ctx.update.message.text}". Could you please try another city?`);
+                await ctx.reply(`Sorry but I failed to determine what is "${ctx.update.message.text}". Could you please enter another city?`);
                 state[userId]['should be'] = 'choosing city';
             }
 
-            state[userId] = {'should be': 'confirming city'};
+        // City entered by user was checked using GMaps Geocoding API, user was asked to confirm if we understood him/her correctly
+        } else if (state[userId]['should be'] === 'confirming city') {
+            console.log(ctx.update.message.text);
+            // .. and answered positively ('Right')
+            // >> SUPPOSED/CORRECT/MAIN CONVERSATION FLOW
+            if (ctx.update.message.text === 'Right!') {
+                await ctx.reply('Ok, here we go ;)');
 
-        // City entered by user was checked using GMaps Geocoding API, user was asked to confirm if we undersood him/her correctly and
-        // answered positively ('Right')
-        } else if (state[userId]['should be'] === 'confirming city' && ctx.update.message.text === 'Right') {
-
-        // City entered by user was checked using GMaps Geocoding API, user was asked to confirm if we undersood him/her correctly and
-        // answered negatively ('No - I'll enter another one')
-        } else if (state[userId]['should be'] === 'confirming city' && ctx.update.message.text === 'No - I\'ll enter another one') {
-            await ctx.reply('Ok, which one?');
-            state[userId]['should be'] = 'choosing city';
+            // ... and answered negatively ('No - I'll enter another one')
+            } else if (ctx.update.message.text === 'No - I\'ll enter another one') {
+                await ctx.reply('Ok, which one?');
+                state[userId]['should be'] = 'choosing city';
+        }
 
         // This will be our Default Fallback intent for already contacted users
         } else {
@@ -87,6 +98,9 @@ bot.on('message', async ctx => {
         await ctx.replyWithHTML('Do you know your city well? \nWill you recognize a place by photo?');
         ctx.replyWithHTML('To start please type in a city');
     }
+
+    console.log();
+    console.log(JSON.stringify(state));
 });
 
 // --------------------- Functions ---------------------------------------------------------------------------------- //
@@ -108,7 +122,8 @@ async function placeSearch(placeName) {
                 'payload': {
                     'city': json.results[0].formatted_address,
                     'latitude': json.results[0].geometry.location.lat,
-                    'longitude': json.results[0].geometry.location.lng
+                    'longitude': json.results[0].geometry.location.lng,
+                    'bounds': json.results[0].geometry.bounds
                 }
             }
         }
@@ -120,6 +135,8 @@ async function placeSearch(placeName) {
         }
     }
 }
+
+
 
 // --------------------- Polling... --------------------------------------------------------------------------------- //
 bot.startPolling();
@@ -135,18 +152,4 @@ await ctx.reply('Special buttons keyboard', Extra.markup((markup) => {
 }))
 */
 
-const one = {
-    message_id: 339,
-    from:
-    { id: 178180819,
-        is_bot: false,
-        first_name: 'Iurii',
-        last_name: 'D.',
-        language_code: 'ru-RU' },
-    chat:
-    { id: 178180819,
-        first_name: 'Iurii',
-        last_name: 'D.',
-        type: 'private' },
-    date: 1533806714,
-    text: 'kiev' }
+
