@@ -103,44 +103,65 @@ async function placeSearch(placeName) {
 async function randomStreetView(ne_x, ne_y, sw_x, sw_y) {
     /*
         Generates a random StreetView image in a given rectangle of coordinates
-        { northeast: { lat: 49.4976831, lng: 32.140585 },
-          southwest: { lat: 49.364583, lng: 31.9578749 } }
+        { northeast: { lat: 49.4976831, lng: 32.140585 }, southwest: { lat: 49.364583, lng: 31.9578749 } }
     */
-    let randLat = (Math.random() * Math.abs(Math.round(ne_x*1000000) - Math.round(sw_x*1000000)))/1000000 + Math.min(ne_x, sw_x);
-    let randLng = (Math.random() * Math.abs(Math.round(ne_y*1000000) - Math.round(sw_y*1000000)))/1000000 + Math.min(ne_y, sw_y);
-    console.log(`random latitude (between ${ne_y} and ${sw_y}): ${randLng}`);
-    console.log(`random latitude (between ${ne_x} and ${sw_x}): ${randLat}`);
+    for (let i=0; i<50; i++){ // let's make not more than 50 requests in sequence ;)
+        let randLat = (Math.random() * Math.abs(Math.round(ne_x*1000000) - Math.round(sw_x*1000000)))/1000000 + Math.min(ne_x, sw_x);
+        let randLng = (Math.random() * Math.abs(Math.round(ne_y*1000000) - Math.round(sw_y*1000000)))/1000000 + Math.min(ne_y, sw_y);
 
-    let query = `https://maps.googleapis.com/maps/api/streetview?size=400x400&location=${randLat},${randLng}&key=${keys.GOOGLE_MAPS_API_KEY}`;
-    console.log(query);
-    // https://maps.googleapis.com/maps/api/streetview?size=400x400&location=${randLat},${randLng}&heading=151.78&pitch=-0.76&key=YOUR_API_KEY&signature=YOUR_SIGNATURE
+        let metadataQuery = `https://maps.googleapis.com/maps/api/streetview/metadata?size=400x400&location=${randLat},${randLng}&key=${keys.GOOGLE_MAPS_API_KEY}`;
+        let imageQuery = `https://maps.googleapis.com/maps/api/streetview?size=400x400&location=${randLat},${randLng}&key=${keys.GOOGLE_MAPS_API_KEY}`;
+        let webMap = `https://www.google.com/maps/@${randLat},${randLng},14z`; // for testing
 
-    try {
-        const response = await fetch(query);
-        const json = await response.json();
+        /*
+        console.log(i);
+        console.log('metadataQuery:');
+        console.log(metadataQuery);
+        console.log('imageQuery:');
+        console.log(imageQuery);
+        console.log('webMap:');
+        console.log(webMap);
+        console.log();
+        */
 
-        //console.log(JSON.stringify(response));
+        try {
+            const response = await fetch(metadataQuery);
+            const json = await response.json();
+            console.log(i);
 
-        if (json.status !== 'OK') {
+            if (json.status === 'OK') {
+                return {
+                    'status': 'ok',
+                    'payload': {
+                        'image': imageQuery,
+                        'exactLocation': {
+                            'lat': json.location.lat,
+                            'lng': json.location.lng
+                        }
+                    }
+                }
+            }
+        } catch(error) {
+            console.log(`>> randomStreetView(): ${error}`);
             return {
                 'status': 'failed',
                 'payload': {}
             }
-        } else {
-            return {
-                'status': 'ok',
-                'payload': {
+        }
+    }
 
-                }
-            }
-        }
-    } catch(error) {
-        console.log(`>> placeSearch(): ${error}`);
-        return {
-            'status': 'failed',
-            'payload': {}
-        }
+    // In case we failed to find something in 50 queries..
+    return {
+        'status': 'failed',
+        'payload': {}
     }
 }
 
-randomStreetView(49.4976831, 32.140585, 49.364583, 31.9578749);
+randomStreetView(49.4976831, 32.140585, 49.364583, 31.9578749).then(data => {
+    if (data.status === 'ok') {
+        console.log(data.payload.image);
+    } else {
+        console.log('Failed to get a street view');
+    }
+
+});
