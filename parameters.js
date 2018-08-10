@@ -1,5 +1,5 @@
 module.exports = {
-    'initialScore': 20,
+    'initialScore': 5,
     'skipImage': 3, // minus 3
     'getHint': 1, // minus 1
     'poorAnswer': 2, // minus 2; if distance between user's marker and actual place is >=50% of city diagonal (km)

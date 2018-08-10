@@ -79,7 +79,7 @@ bot.on('message', async ctx => {
             // .. and answered positively ('Right')
             // >> SUPPOSED (CORRECT/MAIN) CONVERSATION FLOW
             if (ctx.update.message.text === 'Right!') {
-                await ctx.replyWithHTML('Ok, here we go ;)\nHere are the rules:\n- initial score: <b>20</b>\n- skip image: <b>-3</b>\n- get a hint: <b>-1</b>\n- poor answer: <b>-2</b>\n- fair answer: <b>+2</b>\n- good answer: <b>+5</b>');
+                await ctx.replyWithHTML(`Ok, here we go ;)\nHere are the rules:\n- initial score: <b>${params.initialScore}</b>\n- skip image: <b>-${params.skipImage}</b>\n- get a hint: <b>-${params.getHint}</b>\n- poor answer: <b>-${params.poorAnswer}</b>\n- fair answer: <b>+${params.fairAnswer}</b>\n- good answer: <b>+${params.goodAnswer}</b>`);
 
                 // Get a random Street View image in a given coordinates square (stored in user's state)
                 let streetView = await randomStreetView(state[userId].bounds.northeast.lat,
@@ -118,16 +118,28 @@ bot.on('message', async ctx => {
             // User is answering and clicked 'Pass' - show him/her actual location, update balance
             if (ctx.update.message.text === 'Pass') {
                 await ctx.reply('Ok. This place was here:');
-                await ctx.reply(`https://www.google.com/maps/@${state[userId].exactLocation.lat},${state[userId].exactLocation.lng},18z`);
+                await ctx.reply(`https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${state[userId].exactLocation.lat},${state[userId].exactLocation.lng}`);
                 let balanceWas = state[userId]['balance'];
                 let newBalance = state[userId]['balance'] - params.skipImage;
                 state[userId]['balance'] = newBalance;
-                await ctx.replyWithHTML(`Your balance is <b>${balanceWas} - ${params.skipImage} = ${newBalance}</b>`, Markup
-                    .keyboard(['Next question', 'Restart'])
-                    .oneTime()
-                    .resize()
-                    .extra()
-                );
+
+                // Check if user's balance is >0
+                if (newBalance<=0) {
+                    await ctx.replyWithHTML(`<b>Ups.. looks like you lost. Try again?</b>`, Markup
+                        .keyboard(['Restart'])
+                        .oneTime()
+                        .resize()
+                        .extra()
+                    );
+                } else {
+                    await ctx.replyWithHTML(`Your balance is <b>${balanceWas} - ${params.skipImage} = ${newBalance}</b>`, Markup
+                        .keyboard(['Next question', 'Restart'])
+                        .oneTime()
+                        .resize()
+                        .extra()
+                    );
+                    state[userId]['should be'] = 'next question';
+                }
             }
 
             // User is answering and clicked 'Restart' - update state, ask to choose city to start
@@ -138,27 +150,39 @@ bot.on('message', async ctx => {
 
             // User is answering and clicked 'Hint' - give him/her a photo from the same place but with random heading
             // (supposed to be to a different direction but occasionally may be almost the same)
+            // User's state remains the same ('answering')
             if (ctx.update.message.text === 'Hint') {
                 let balanceWas = state[userId]['balance'];
                 let newBalance = state[userId]['balance'] - params.getHint;
                 state[userId]['balance'] = newBalance;
-                await ctx.replyWithHTML(`Ok, here's another photo from the same place\nYour balance is <b>${balanceWas} - ${params.getHint} = ${newBalance}</b>`);
 
-                let randHeading = Math.random() * 360;
-                await ctx.replyWithPhoto(`https://maps.googleapis.com/maps/api/streetview?size=400x400&location=${state[userId].exactLocation.lat},${state[userId].exactLocation.lng}&heading=${randHeading}&key=${keys.GOOGLE_MAPS_API_KEY}`);
+                // Check if user's balance is >0
+                if (newBalance<=0) {
+                    await ctx.replyWithHTML(`<b>Ups.. looks like you lost. Try again?</b>`, Markup
+                        .keyboard(['Restart'])
+                        .oneTime()
+                        .resize()
+                        .extra()
+                    );
+                } else {
+                    await ctx.replyWithHTML(`Ok, here's another photo from the same place\nYour balance is <b>${balanceWas} - ${params.getHint} = ${newBalance}</b>`);
 
-                await ctx.replyWithHTML('Where is this place?\nTo indicate location please <b>send a location</b> having dragged the marker to the needed place', Markup
-                    .keyboard(['Pass', 'Hint', 'Restart'])
-                    .oneTime()
-                    .resize()
-                    .extra()
-                );
+                    let randHeading = Math.random() * 360;
+                    await ctx.replyWithPhoto(`https://maps.googleapis.com/maps/api/streetview?size=400x400&location=${state[userId].exactLocation.lat},${state[userId].exactLocation.lng}&heading=${randHeading}&key=${keys.GOOGLE_MAPS_API_KEY}`);
+
+                    await ctx.replyWithHTML('Where is this place?\nTo indicate location please <b>send a location</b> having dragged the marker to the needed place', Markup
+                        .keyboard(['Pass', 'Hint', 'Restart'])
+                        .oneTime()
+                        .resize()
+                        .extra()
+                    );
+                }
             }
 
             // User sent location
             if (ctx.update.message.location) {
                 // Draw a static map image with 2 markers (actual place and user's guess) and a line between them
-                await ctx.reply(`Ok. Here's how your answer (red) corresponds to actual location (green):`);
+                await ctx.reply(`Ok. Here's how your answer (red marker) corresponds to actual location (green marker):`);
                 await ctx.replyWithPhoto(`https://maps.googleapis.com/maps/api/staticmap?language=en&region=US&zoom=12&size=400x400&markers=color:green|${state[userId]['exactLocation']['lat']},${state[userId]['exactLocation']['lng']}&markers=color:red|${ctx.update.message.location.latitude},${ctx.update.message.location.longitude}&path=${state[userId]['exactLocation']['lat']},${state[userId]['exactLocation']['lng']}|${ctx.update.message.location.latitude},${ctx.update.message.location.longitude}&key=${keys.GOOGLE_MAPS_API_KEY}`);
                 await ctx.reply(`Here's the actual place that was asked: https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${state[userId].exactLocation.lat},${state[userId].exactLocation.lng}`);
 
@@ -187,17 +211,52 @@ bot.on('message', async ctx => {
                     summary = 'Not bad (but could be better) ;)';
                 } else if (markerDistance/cityDistance >= params.fairAnswerLowerLimit) { // if distance between user's marker and actual place is >=50% of city diagonal (km), -2
                     grade = -2;
-                    summary = 'Not really ;)';
+                    summary = 'Missed! ;)';
                 }
 
                 let balanceWas = state[userId]['balance'];
                 let newBalance = state[userId]['balance'] + grade;
                 state[userId]['balance'] = newBalance;
-                await ctx.replyWithHTML(`Straight distance between the markers is ${distanceVerdict}\n${summary}\nYou balance is: <b>${balanceWas} ${grade<0 ? '-' : '+'} ${grade} = ${newBalance}</b>`, Markup
-                    .keyboard(['Next question', 'Restart'])
+
+                // Check if user's balance is >0
+                if (newBalance<=0) {
+                    await ctx.replyWithHTML(`<b>Ups.. looks like you lost. Try again?</b>`, Markup
+                        .keyboard(['Restart'])
+                        .oneTime()
+                        .resize()
+                        .extra()
+                    );
+                } else {
+                    await ctx.replyWithHTML(`Straight distance between the markers is ${distanceVerdict}\n${summary}\nYou balance is: <b>${balanceWas} ${grade<0 ? '' : '+'} ${grade} = ${newBalance}</b>`, Markup
+                        .keyboard(['Next question', 'Restart'])
+                        .oneTime()
+                        .resize()
+                        .extra());
+
+                    state[userId]['should be'] = 'next question';
+                    state[userId]['exact location'] = {};
+                }
+            }
+
+        // User either passed a question or answered it and clicked the button 'Next question'
+        } else if (state[userId]['should be'] === 'next question') {
+            // Get a random Street View image in a given coordinates square (stored in user's state)
+            let streetView = await randomStreetView(state[userId].bounds.northeast.lat,
+                state[userId].bounds.northeast.lng, state[userId].bounds.southwest.lat, state[userId].bounds.southwest.lng);
+
+            if (streetView.status === 'ok') {
+                await ctx.replyWithPhoto(streetView.payload.image);
+
+                await ctx.replyWithHTML('Where is this place?\nTo indicate location please <b>send a location</b> having dragged the marker to the needed place', Markup
+                    .keyboard(['Pass', 'Hint', 'Restart'])
                     .oneTime()
                     .resize()
-                    .extra());
+                    .extra()
+                );
+
+                // Update user's state - save the coordinates of place that was shown, state='answering', (initial) balance=20
+                state[userId]['exactLocation'] = streetView.payload.exactLocation;
+                state[userId]['should be'] = 'answering';
             }
 
         // This will be our Default Fallback intent for already contacted users
