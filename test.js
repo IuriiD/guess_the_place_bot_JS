@@ -165,3 +165,30 @@ randomStreetView(49.4976831, 32.140585, 49.364583, 31.9578749).then(data => {
     }
 
 });
+
+function distanceBetweenMarkers(lat1, lon1, lat2, lon2) {
+    /*
+        Calculate distance between two coordinates using Haversine formula
+        // https://stackoverflow.com/questions/27928/calculate-distance-between-two-latitude-longitude-points-haversine-formula/27943#27943
+        Actual location: {"lat":49.48476500248736,"lng":31.99574963103022}, your guess: {"latitude":49.456448,"longitude":32.046515
+    */
+        const R = 6371; // Radius of the earth in km
+        let dLat = deg2rad(lat2-lat1);  // deg2rad below
+        let dLon = deg2rad(lon2-lon1);
+        let a =
+            Math.sin(dLat/2) * Math.sin(dLat/2) +
+            Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
+            Math.sin(dLon/2) * Math.sin(dLon/2)
+        ;
+        let c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        let d = R * c; // Distance in km
+        return d;
+    }
+
+function deg2rad(deg) {
+        return deg * (Math.PI/180);
+}
+    // Actual location: {"lat":49.48476500248736,"lng":31.99574963103022}, your guess: {"latitude":49.456448,"longitude":32.046515
+
+console.log(distanceBetweenMarkers(49.48476500248736,31.99574963103022, 49.456448,32.046515));
+console.log(distanceBetweenMarkers(49.48476500248736,31.99574963103022, 49.48476500248736,31.99574963103022));

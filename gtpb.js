@@ -16,6 +16,7 @@ const fetch = require("node-fetch");
 const util = require('util'); // used for printing data to console, dealing with circular scructures
 
 const keys = require('./keys');
+const params = require('./parameters');
 
 let state = {}; // storing at which stage of conversation each user is
 
@@ -40,7 +41,7 @@ bot.command(['start', 'restart'], async ctx => {
 
 
 bot.on('message', async ctx => {
-
+    console.log(ctx.message);
 
     const userId = ctx.from.id;
 
@@ -79,18 +80,125 @@ bot.on('message', async ctx => {
             // >> SUPPOSED (CORRECT/MAIN) CONVERSATION FLOW
             if (ctx.update.message.text === 'Right!') {
                 await ctx.replyWithHTML('Ok, here we go ;)\nHere are the rules:\n- initial score: <b>20</b>\n- skip image: <b>-3</b>\n- get a hint: <b>-1</b>\n- poor answer: <b>-2</b>\n- fair answer: <b>+2</b>\n- good answer: <b>+5</b>');
+
+                // Get a random Street View image in a given coordinates square (stored in user's state)
                 let streetView = await randomStreetView(state[userId].bounds.northeast.lat,
                     state[userId].bounds.northeast.lng, state[userId].bounds.southwest.lat, state[userId].bounds.southwest.lng);
 
                 if (streetView.status === 'ok') {
+                    // Store exact place's coordinates in user's state
+                    await ctx.reply('And here\'s my first question:');
+
                     await ctx.replyWithPhoto(streetView.payload.image);
+                    // For testing
+                    //await ctx.reply(`https://www.google.com/maps/@${streetView.payload.exactLocation.lat},${streetView.payload.exactLocation.lng},18z`);
+
+                    await ctx.replyWithHTML('Where is this place?\nTo indicate location please <b>send a location</b> having dragged the marker to the needed place', Markup
+                        .keyboard(['Pass', 'Hint', 'Restart'])
+                        .oneTime()
+                        .resize()
+                        .extra()
+                    );
+
+                    // Update user's state - save the coordinates of place that was shown, state='answering', (initial) balance=20
+                    state[userId]['exactLocation'] = streetView.payload.exactLocation;
+                    state[userId]['should be'] = 'answering';
+                    state[userId]['balance'] = params.initialScore;
                 }
 
-            // ... and answered negatively ('No - I'll enter another one')
+                // ... and answered negatively ('No - I'll enter another one')
             } else if (ctx.update.message.text === 'No - I\'ll enter another one') {
                 await ctx.reply('Ok, which one?');
                 state[userId]['should be'] = 'choosing city';
-        }
+            }
+
+        // User got a question and is answering
+        // He/she may a) pass/see answer, b) get a hint, c) send a location=answer, d) restart game
+        } else if (state[userId]['should be'] === 'answering') {
+            // User is answering and clicked 'Pass' - show him/her actual location, update balance
+            if (ctx.update.message.text === 'Pass') {
+                await ctx.reply('Ok. This place was here:');
+                await ctx.reply(`https://www.google.com/maps/@${state[userId].exactLocation.lat},${state[userId].exactLocation.lng},18z`);
+                let balanceWas = state[userId]['balance'];
+                let newBalance = state[userId]['balance'] - params.skipImage;
+                state[userId]['balance'] = newBalance;
+                await ctx.replyWithHTML(`Your balance is <b>${balanceWas} - ${params.skipImage} = ${newBalance}</b>`, Markup
+                    .keyboard(['Next question', 'Restart'])
+                    .oneTime()
+                    .resize()
+                    .extra()
+                );
+            }
+
+            // User is answering and clicked 'Restart' - update state, ask to choose city to start
+            if (ctx.update.message.text === 'Restart') {
+                await ctx.reply('Ok, let\'s start afresh. Please type in a city');
+                state[userId] = {'should be': 'choosing city'};
+            }
+
+            // User is answering and clicked 'Hint' - give him/her a photo from the same place but with random heading
+            // (supposed to be to a different direction but occasionally may be almost the same)
+            if (ctx.update.message.text === 'Hint') {
+                let balanceWas = state[userId]['balance'];
+                let newBalance = state[userId]['balance'] - params.getHint;
+                state[userId]['balance'] = newBalance;
+                await ctx.replyWithHTML(`Ok, here's another photo from the same place\nYour balance is <b>${balanceWas} - ${params.getHint} = ${newBalance}</b>`);
+
+                let randHeading = Math.random() * 360;
+                await ctx.replyWithPhoto(`https://maps.googleapis.com/maps/api/streetview?size=400x400&location=${state[userId].exactLocation.lat},${state[userId].exactLocation.lng}&heading=${randHeading}&key=${keys.GOOGLE_MAPS_API_KEY}`);
+
+                await ctx.replyWithHTML('Where is this place?\nTo indicate location please <b>send a location</b> having dragged the marker to the needed place', Markup
+                    .keyboard(['Pass', 'Hint', 'Restart'])
+                    .oneTime()
+                    .resize()
+                    .extra()
+                );
+            }
+
+            // User sent location
+            if (ctx.update.message.location) {
+                // Draw a static map image with 2 markers (actual place and user's guess) and a line between them
+                await ctx.reply(`Ok. Here's how your answer (red) corresponds to actual location (green):`);
+                await ctx.replyWithPhoto(`https://maps.googleapis.com/maps/api/staticmap?language=en&region=US&zoom=12&size=400x400&markers=color:green|${state[userId]['exactLocation']['lat']},${state[userId]['exactLocation']['lng']}&markers=color:red|${ctx.update.message.location.latitude},${ctx.update.message.location.longitude}&path=${state[userId]['exactLocation']['lat']},${state[userId]['exactLocation']['lng']}|${ctx.update.message.location.latitude},${ctx.update.message.location.longitude}&key=${keys.GOOGLE_MAPS_API_KEY}`);
+                await ctx.reply(`Here's the actual place that was asked: https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${state[userId].exactLocation.lat},${state[userId].exactLocation.lng}`);
+
+
+                // Calculate distance between two markers
+                const markerDistance = await distanceBetweenMarkers(state[userId]['exactLocation']['lat'], state[userId]['exactLocation']['lng'], ctx.update.message.location.latitude, ctx.update.message.location.longitude);
+                let distanceVerdict = '';
+                if (markerDistance<1) {
+                    distanceVerdict = `only about ${Math.round(markerDistance * 1000)} meters`;
+                } else {
+                    distanceVerdict = `about ${Math.round(markerDistance * 100) / 100} km`
+                }
+
+                // Results will be graded using ratio of actual distance between points (km) and 'the size of the city'
+                // (decided to use diagonal between the northeast and southwest points/bounds for the city)
+                let cityDistance = await distanceBetweenMarkers(state[userId]['bounds']['northeast']['lat'], state[userId]['bounds']['northeast']['lng'], state[userId]['bounds']['southwest']['lat'], state[userId]['bounds']['southwest']['lng']);
+
+                let grade = 0;
+                let summary = '';
+
+                if (markerDistance/cityDistance < params.goodAnswerLowerLimit) { // if distance between user's marker and actual place is <10% of city diagonal (km) - good answer, +5
+                    grade = 5;
+                    summary = 'Excellent answer!';
+                }  else if (markerDistance/cityDistance >= params.goodAnswerLowerLimit && markerDistance/cityDistance < params.fairAnswerLowerLimit) { // if distance between user's marker and actual place is >=10% and <50% of city diagonal (km) - fair answer, +2
+                    grade = 2;
+                    summary = 'Not bad (but could be better) ;)';
+                } else if (markerDistance/cityDistance >= params.fairAnswerLowerLimit) { // if distance between user's marker and actual place is >=50% of city diagonal (km), -2
+                    grade = -2;
+                    summary = 'Not really ;)';
+                }
+
+                let balanceWas = state[userId]['balance'];
+                let newBalance = state[userId]['balance'] + grade;
+                state[userId]['balance'] = newBalance;
+                await ctx.replyWithHTML(`Straight distance between the markers is ${distanceVerdict}\n${summary}\nYou balance is: <b>${balanceWas} ${grade<0 ? '-' : '+'} ${grade} = ${newBalance}</b>`, Markup
+                    .keyboard(['Next question', 'Restart'])
+                    .oneTime()
+                    .resize()
+                    .extra());
+            }
 
         // This will be our Default Fallback intent for already contacted users
         } else {
@@ -153,8 +261,10 @@ async function randomStreetView(ne_x, ne_y, sw_x, sw_y) {
         let randLng = (Math.random() * Math.abs(Math.round(ne_y*1000000) - Math.round(sw_y*1000000)))/1000000 + Math.min(ne_y, sw_y);
 
         let metadataQuery = `https://maps.googleapis.com/maps/api/streetview/metadata?size=400x400&location=${randLat},${randLng}&key=${keys.GOOGLE_MAPS_API_KEY}`;
-        let imageQuery = `https://maps.googleapis.com/maps/api/streetview?size=400x400&source=outdoor&location=${randLat},${randLng}&key=${keys.GOOGLE_MAPS_API_KEY}`;
-        let webMap = `https://www.google.com/maps/@${randLat},${randLng},14z`; // for testing
+        let imageQuery = `https://maps.googleapis.com/maps/api/streetview?size=400x400&location=${randLat},${randLng}&key=${keys.GOOGLE_MAPS_API_KEY}`;
+        // To limit images to outdoors only
+        //let imageQuery = `https://maps.googleapis.com/maps/api/streetview?size=400x400&source=outdoor&location=${randLat},${randLng}&key=${keys.GOOGLE_MAPS_API_KEY}`;
+        //let webMap = `https://www.google.com/maps/@${randLat},${randLng},14z`; // for testing
 
         /*
         console.log(i);
@@ -198,6 +308,70 @@ async function randomStreetView(ne_x, ne_y, sw_x, sw_y) {
         'status': 'failed',
         'payload': {}
     }
+}
+
+
+async function getStreetView(lat, lng, heading=false) {
+    /*
+        Fetches a Google Street View image for given lat/lng and optionally for a random heading
+    */
+    let imageQuery = '';
+    if (!heading) {
+        imageQuery = `https://maps.googleapis.com/maps/api/streetview?size=400x400&location=${lat},${lng}&key=${keys.GOOGLE_MAPS_API_KEY}`;
+    } else {
+        let randHeading = Math.random() * 360;
+        imageQuery = `https://maps.googleapis.com/maps/api/streetview?size=400x400&location=${lat},${lng}&heading=${randHeading}&key=${keys.GOOGLE_MAPS_API_KEY}`;
+    }
+
+    try {
+        const response = await fetch(imageQuery);
+        const json = await response.json();
+
+        if (json.status === 'OK') {
+            return {
+                'status': 'ok',
+                'payload': {
+                    'image': imageQuery,
+                    'exactLocation': {
+                        'lat': json.location.lat,
+                        'lng': json.location.lng
+                    }
+                }
+            }
+        }
+    } catch(error) {
+        console.log(`>> randomStreetView(): ${error}`);
+        return {
+            'status': 'failed',
+            'payload': {}
+        }
+    }
+}
+
+
+function distanceBetweenMarkers(lat1, lon1, lat2, lon2) {
+    /*
+        Calculate distance between two coordinates using Haversine formula
+        // https://stackoverflow.com/questions/27928/calculate-distance-between-two-latitude-longitude-points-haversine-formula/27943#27943
+    */
+    const R = 6371; // Radius of the earth in km
+    let dLat = deg2rad(lat2-lat1);  // deg2rad below
+    let dLon = deg2rad(lon2-lon1);
+    let a =
+        Math.sin(dLat/2) * Math.sin(dLat/2) +
+        Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
+        Math.sin(dLon/2) * Math.sin(dLon/2)
+    ;
+    let c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    let d = R * c; // Distance in km
+    return d;
+}
+
+function deg2rad(deg) {
+    /*
+        Helper function for distanceBetweenMarkers()
+    */
+    return deg * (Math.PI/180);
 }
 
 
