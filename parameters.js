@@ -6,5 +6,5 @@ module.exports = {
     'fairAnswer': 2, // plus 2; if distance between user's marker and actual place is >=10% and <50% of city diagonal (km)
     'goodAnswer': 5, // plus 5; if distance between user's marker and actual place is <10% of city diagonal (km)
     'goodAnswerLowerLimit': 0.1,
-    'fairAnswerLowerLimit': 0.4,
+    'fairAnswerLowerLimit': 0.3,
 };

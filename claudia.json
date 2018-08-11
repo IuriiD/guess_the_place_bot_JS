@@ -1,0 +1,7 @@
+{
+  "lambda": {
+    "role": "guess_the_place_botjs-executor",
+    "name": "guess_the_place_botjs",
+    "region": "us-east-1"
+  }
+}

@@ -1,11 +1,4 @@
-// Telegram - setWebhook
-// a) for AWS Lambda
-// curl --request POST --url https://api.telegram.org/bot656695873:AAH2YaCAEwVm7r80nP7zH5oWE-Rw4A_SYqQ/setWebhook --header 'content-type: application/json' --data '{"url": "https://mvwzccr507.execute-api.us-east-1.amazonaws.com/default/guessThePlaceBot"}'
-// b) for localhost (via ngrok)
-// curl --request POST --url https://api.telegram.org/bot656695873:AAH2YaCAEwVm7r80nP7zH5oWE-Rw4A_SYqQ/setWebhook --header 'content-type: application/json' --data '{"url": "https://d52edc2a.ngrok.io"}'
-
-// Telegram - check webhook
-// curl --request POST --url https://api.telegram.org/bot656695873:AAH2YaCAEwVm7r80nP7zH5oWE-Rw4A_SYqQ/getWebhookInfo --header 'content-type: application/json'
+// Deployed to AWS Lambda
 
 'use strict';
 
@@ -13,14 +6,19 @@ const Telegraf = require('telegraf');
 const Extra = require('telegraf/extra');
 const Markup = require('telegraf/markup');
 const fetch = require("node-fetch");
-const util = require('util'); // used for printing data to console, dealing with circular scructures
 
-const keys = require('./keys');
 const params = require('./parameters');
 
 let state = {}; // storing at which stage of conversation each user is
 
+const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
+const bot = new Telegraf(process.env.TELEGRAM_TOKEN);
+
+/*
+const keys = require('./keys');
+const GOOGLE_MAPS_API_KEY = keys.GOOGLE_MAPS_API_KEY;
 const bot = new Telegraf(keys.TELEGRAM_TOKEN);
+*/
 
 // --------------------- Conversation logic ------------------------------------------------------------------------- //
 bot.command(['start', 'restart'], async ctx => {
@@ -54,7 +52,7 @@ bot.on('message', async ctx => {
             let cityOfInterest = await placeSearch(ctx.update.message.text);
 
             if (cityOfInterest.status === 'ok') {
-                await ctx.replyWithPhoto(`https://maps.googleapis.com/maps/api/staticmap?language=en&region=US&center=${cityOfInterest.payload.latitude},${cityOfInterest.payload.longitude}&zoom=12&size=400x400&key=${keys.GOOGLE_MAPS_API_KEY}`);
+                await ctx.replyWithPhoto(`https://maps.googleapis.com/maps/api/staticmap?language=en&region=US&center=${cityOfInterest.payload.latitude},${cityOfInterest.payload.longitude}&zoom=12&size=400x400&key=${GOOGLE_MAPS_API_KEY}`);
 
                 await ctx.replyWithHTML(`Do you mean <b>${cityOfInterest.payload.city}</b>?`, Markup
                     .keyboard(['Right!', 'No - I\'ll enter another one'])
@@ -168,7 +166,7 @@ bot.on('message', async ctx => {
                     await ctx.replyWithHTML(`Ok, here's another photo from the same place\nYour balance is <b>${balanceWas} - ${params.getHint} = ${newBalance}</b>`);
 
                     let randHeading = Math.random() * 360;
-                    await ctx.replyWithPhoto(`https://maps.googleapis.com/maps/api/streetview?size=400x400&location=${state[userId].exactLocation.lat},${state[userId].exactLocation.lng}&heading=${randHeading}&key=${keys.GOOGLE_MAPS_API_KEY}`);
+                    await ctx.replyWithPhoto(`https://maps.googleapis.com/maps/api/streetview?size=400x400&location=${state[userId].exactLocation.lat},${state[userId].exactLocation.lng}&heading=${randHeading}&key=${GOOGLE_MAPS_API_KEY}`);
 
                     await ctx.replyWithHTML('Where is this place?\nTo indicate location please <b>send a location</b> having dragged the marker to the needed place', Markup
                         .keyboard(['Pass', 'Hint', 'Restart'])
@@ -183,7 +181,7 @@ bot.on('message', async ctx => {
             if (ctx.update.message.location) {
                 // Draw a static map image with 2 markers (actual place and user's guess) and a line between them
                 await ctx.reply(`Ok. Here's how your answer (red marker) corresponds to actual location (green marker):`);
-                await ctx.replyWithPhoto(`https://maps.googleapis.com/maps/api/staticmap?language=en&region=US&zoom=12&size=400x400&markers=color:green|${state[userId]['exactLocation']['lat']},${state[userId]['exactLocation']['lng']}&markers=color:red|${ctx.update.message.location.latitude},${ctx.update.message.location.longitude}&path=${state[userId]['exactLocation']['lat']},${state[userId]['exactLocation']['lng']}|${ctx.update.message.location.latitude},${ctx.update.message.location.longitude}&key=${keys.GOOGLE_MAPS_API_KEY}`);
+                await ctx.replyWithPhoto(`https://maps.googleapis.com/maps/api/staticmap?language=en&region=US&zoom=12&size=400x400&markers=color:green|${state[userId]['exactLocation']['lat']},${state[userId]['exactLocation']['lng']}&markers=color:red|${ctx.update.message.location.latitude},${ctx.update.message.location.longitude}&path=${state[userId]['exactLocation']['lat']},${state[userId]['exactLocation']['lng']}|${ctx.update.message.location.latitude},${ctx.update.message.location.longitude}&key=${GOOGLE_MAPS_API_KEY}`);
                 await ctx.reply(`Here's the actual place that was asked: https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${state[userId].exactLocation.lat},${state[userId].exactLocation.lng}`);
 
 
@@ -227,7 +225,7 @@ bot.on('message', async ctx => {
                         .extra()
                     );
                 } else {
-                    await ctx.replyWithHTML(`Straight distance between the markers is ${distanceVerdict}\n${summary}\nYou balance is: <b>${balanceWas} ${grade<0 ? '' : '+'} ${grade} = ${newBalance}</b>`, Markup
+                    await ctx.replyWithHTML(`Straight distance between the markers is ${distanceVerdict}\n${summary}\nYou balance is: <b>${balanceWas}${grade<0 ? '' : '+'} ${grade} = ${newBalance}</b>`, Markup
                         .keyboard(['Next question', 'Restart'])
                         .oneTime()
                         .resize()
@@ -277,9 +275,21 @@ bot.on('message', async ctx => {
 });
 
 
-// --------------------- Functions ---------------------------------------------------------------------------------- //
+// --------------------- AWS Lambda handler function ---------------------------------------------------------------- //
+// https://github.com/telegraf/telegraf/issues/129
+exports.handler = (event, context, callback) => {
+    const tmp = JSON.parse(event.body); // get data passed to us
+    bot.handleUpdate(tmp); // make Telegraf process that data
+    return callback(null, { // return something for webhook, so it doesn't try to send same stuff again
+        statusCode: 200,
+        body: '',
+    });
+};
+
+
+// --------------------- Helper Funcions ---------------------------------------------------------------------------- //
 async function placeSearch(placeName) {
-    let query = `https://maps.googleapis.com/maps/api/geocode/json?address=${placeName}&key=${keys.GOOGLE_MAPS_API_KEY}`;
+    let query = `https://maps.googleapis.com/maps/api/geocode/json?address=${placeName}&key=${GOOGLE_MAPS_API_KEY}`;
 
     try {
         const response = await fetch(query);
@@ -319,10 +329,10 @@ async function randomStreetView(ne_x, ne_y, sw_x, sw_y) {
         let randLat = (Math.random() * Math.abs(Math.round(ne_x*1000000) - Math.round(sw_x*1000000)))/1000000 + Math.min(ne_x, sw_x);
         let randLng = (Math.random() * Math.abs(Math.round(ne_y*1000000) - Math.round(sw_y*1000000)))/1000000 + Math.min(ne_y, sw_y);
 
-        let metadataQuery = `https://maps.googleapis.com/maps/api/streetview/metadata?size=400x400&location=${randLat},${randLng}&key=${keys.GOOGLE_MAPS_API_KEY}`;
-        let imageQuery = `https://maps.googleapis.com/maps/api/streetview?size=400x400&location=${randLat},${randLng}&key=${keys.GOOGLE_MAPS_API_KEY}`;
+        let metadataQuery = `https://maps.googleapis.com/maps/api/streetview/metadata?size=400x400&location=${randLat},${randLng}&key=${GOOGLE_MAPS_API_KEY}`;
+        let imageQuery = `https://maps.googleapis.com/maps/api/streetview?size=400x400&location=${randLat},${randLng}&key=${GOOGLE_MAPS_API_KEY}`;
         // To limit images to outdoors only
-        //let imageQuery = `https://maps.googleapis.com/maps/api/streetview?size=400x400&source=outdoor&location=${randLat},${randLng}&key=${keys.GOOGLE_MAPS_API_KEY}`;
+        //let imageQuery = `https://maps.googleapis.com/maps/api/streetview?size=400x400&source=outdoor&location=${randLat},${randLng}&key=${GOOGLE_MAPS_API_KEY}`;
         //let webMap = `https://www.google.com/maps/@${randLat},${randLng},14z`; // for testing
 
         /*
@@ -376,10 +386,10 @@ async function getStreetView(lat, lng, heading=false) {
     */
     let imageQuery = '';
     if (!heading) {
-        imageQuery = `https://maps.googleapis.com/maps/api/streetview?size=400x400&location=${lat},${lng}&key=${keys.GOOGLE_MAPS_API_KEY}`;
+        imageQuery = `https://maps.googleapis.com/maps/api/streetview?size=400x400&location=${lat},${lng}&key=${GOOGLE_MAPS_API_KEY}`;
     } else {
         let randHeading = Math.random() * 360;
-        imageQuery = `https://maps.googleapis.com/maps/api/streetview?size=400x400&location=${lat},${lng}&heading=${randHeading}&key=${keys.GOOGLE_MAPS_API_KEY}`;
+        imageQuery = `https://maps.googleapis.com/maps/api/streetview?size=400x400&location=${lat},${lng}&heading=${randHeading}&key=${GOOGLE_MAPS_API_KEY}`;
     }
 
     try {
@@ -435,17 +445,6 @@ function deg2rad(deg) {
 
 
 // --------------------- Polling... --------------------------------------------------------------------------------- //
-bot.startPolling();
-
-/*
-// To display a text message with reply button for sharing location
-// https://github.com/telegraf/telegraf/blob/develop/docs/examples/keyboard-bot.js#L38
-await ctx.reply('Special buttons keyboard', Extra.markup((markup) => {
-    return markup.resize()
-        .keyboard([
-            markup.locationRequestButton('Send location')
-        ]).oneTime()
-}))
-*/
-
+// Not needed if using Webhooks and hosting on AWS Lambda
+//bot.startPolling();
 

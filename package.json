@@ -1,7 +1,7 @@
 {
   "name": "guess_the_place_botjs",
   "version": "1.0.0",
-  "description": "Telegram chatbot that presents images from Google Street View for a given city and asks to identify the place. Dialogflow (NLU, conversation constructor), NodeJS (webhooks, hosted on AWS Lambda), PostgreSQL+sequelizejs for storing data, Telegram Bot API",
+  "description": "Telegram chatbot that asks to identify places in a chosen city by Google Street View images. NodeJS, Telegram Bot API (Telegraf wrapper), hosted on AWS Lambda, PostgreSQL+sequelizejs for storing data",
   "main": "gtpb.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"

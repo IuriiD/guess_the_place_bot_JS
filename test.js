@@ -190,5 +190,3 @@ function deg2rad(deg) {
 }
     // Actual location: {"lat":49.48476500248736,"lng":31.99574963103022}, your guess: {"latitude":49.456448,"longitude":32.046515
 
-console.log(distanceBetweenMarkers(49.48476500248736,31.99574963103022, 49.456448,32.046515));
-console.log(distanceBetweenMarkers(49.48476500248736,31.99574963103022, 49.48476500248736,31.99574963103022));
