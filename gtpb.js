@@ -15,6 +15,7 @@ const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
 const bot = new Telegraf(process.env.TELEGRAM_TOKEN);
 
 /*
+// Development; long polling
 const keys = require('./keys');
 const GOOGLE_MAPS_API_KEY = keys.GOOGLE_MAPS_API_KEY;
 const bot = new Telegraf(keys.TELEGRAM_TOKEN);
@@ -260,6 +261,7 @@ bot.on('message', async ctx => {
         // This will be our Default Fallback intent for already contacted users
         } else {
             ctx.replyWithHTML('To start please type in a city');
+            state[userId]['should be'] = 'choosing city';
         }
     } else {
         // And here's a Default Fallback intent for new users - unlikely (may be triggered only if bot is reloaded
@@ -268,6 +270,7 @@ bot.on('message', async ctx => {
         await ctx.reply(`Hi, ${username}! I'm a GuessThePlaceBot`);
         await ctx.replyWithHTML('Do you know your city well? \nWill you recognize a place by photo?');
         ctx.replyWithHTML('To start please type in a city');
+        state[userId] = {'should be': 'choosing city'};
     }
 
     console.log();
