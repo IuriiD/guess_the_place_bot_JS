@@ -1,4 +1,4 @@
-// Bot version using database
+// Version of the bot that doesn't use DB
 
 'use strict';
 
@@ -11,16 +11,15 @@ const params = require('./parameters');
 
 let state = {}; // storing at which stage of conversation each user is
 
-/*
-// Production
 const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
 const bot = new Telegraf(process.env.TELEGRAM_TOKEN);
-*/
 
+/*
 // Development; long polling
 const keys = require('./keys');
 const GOOGLE_MAPS_API_KEY = keys.GOOGLE_MAPS_API_KEY;
 const bot = new Telegraf(keys.TELEGRAM_TOKEN);
+*/
 
 // --------------------- Conversation logic ------------------------------------------------------------------------- //
 bot.command(['start', 'restart'], async ctx => {
@@ -28,41 +27,17 @@ bot.command(['start', 'restart'], async ctx => {
     const userId = ctx.from.id;
 
     if (!state[userId]) {
-        // Let's check if user already played in previous invocation of function on AWS
-        let q = `SELECT * FROM ${params.usersTable} WHERE telegram_id=${userId}`;
-        let dbResponse = await getQuery(q);
-        let dbResponseParsed = JSON.parse(dbResponse);
-        console.log(dbResponseParsed);
-        if (dbResponseParsed.rows[0].count!=='0') {
-            let lastCity = dbResponseParsed.rows[0].last_city;
-            await ctx.reply(`Welcome back, ${username}!`);
-            await ctx.replyWithHTML('To start please type in a city', Markup
-                .keyboard([lastCity])
-                .oneTime()
-                .resize()
-                .extra());
-        } else {
-            await ctx.reply(`Hi, ${username} I'm a GuessThePlaceBot`);
-            await ctx.replyWithHTML('Do you know your city well? \nWill you recognize a place by photo?');
-            await ctx.replyWithHTML('To start please type in a city');
-        }
+        await ctx.reply(`Hi, ${username}! I'm a GuessThePlaceBot`);
+        await ctx.replyWithHTML('Do you know your city well? \nWill you recognize a place by photo?');
     }
+
+    //await ctx.replyWithHTML('To start please type in a city. \nYou can also indicate a city on map by sending a location type attachment');
+    await ctx.replyWithHTML('To start please type in a city');
 
     // let's remember that user with given ID was prompted to choose a city
     state[userId] = {'should be': 'choosing city'};
-
-    // Let's save user's Telegram ID and first name to our DB
-    // Table 'users': CREATE TABLE users(telegram_id INT PRIMARY KEY, first_name TEXT, last_city TEXT, last_city_bounds JSON, last_score INT, top_score INT);
-    // INSERT INTO users(telegram_id, first_name, last_city, last_city_bounds, last_score, top_score) VALUES (178180819, 'Iurii', 'Cherkasy', '{"bounds":{"northeast":{"lat":49.4976831,"lng":32.140585},"southwest":{"lat":49.364583,"lng":31.9578749}}}', 12, 20);
-
-    /*
-    let q = `SELECT * FROM ${proverbsTable} where id=${nextProverbID}`;
-    let dbResponse = await getQuery(q);
-    let dbResponseParsed = JSON.parse(dbResponse);
-    let proverbStarts = dbResponseParsed.rows[0].proverbstarts;
-    users[sessionId].anwserVariants = dbResponseParsed.rows[0].proverbends;
-    */
 });
+
 
 bot.on('message', async ctx => {
     console.log(ctx.message);
@@ -78,7 +53,7 @@ bot.on('message', async ctx => {
             let cityOfInterest = await placeSearch(ctx.update.message.text);
 
             if (cityOfInterest.status === 'ok') {
-                await ctx.replyWithPhoto(`https://maps.googleapis.com/maps/api/staticmap?language=en&region=US&center=${cityOfInterest.payload.latitude},${cityOfInterest.payload.longitude}&zoom=12&size=${params.imageWidth}x${params.imageHeight}&key=${GOOGLE_MAPS_API_KEY}`);
+                await ctx.replyWithPhoto(`https://maps.googleapis.com/maps/api/staticmap?language=en&region=US&center=${cityOfInterest.payload.latitude},${cityOfInterest.payload.longitude}&zoom=12&size=400x400&key=${GOOGLE_MAPS_API_KEY}`);
 
                 await ctx.replyWithHTML(`Do you mean <b>${cityOfInterest.payload.city}</b>?`, Markup
                     .keyboard(['Right!', 'No - I\'ll enter another one'])
@@ -104,8 +79,6 @@ bot.on('message', async ctx => {
             // >> SUPPOSED (CORRECT/MAIN) CONVERSATION FLOW
             if (ctx.update.message.text === 'Right!') {
                 await ctx.replyWithHTML(`Ok, here we go ;)\nHere are the rules:\n- initial score: <b>${params.initialScore}</b>\n- skip image: <b>-${params.skipImage}</b>\n- get a hint: <b>-${params.getHint}</b>\n- poor answer: <b>-${params.poorAnswer}</b>\n- fair answer: <b>+${params.fairAnswer}</b>\n- good answer: <b>+${params.goodAnswer}</b>`);
-                await ctx.replyWithHTML(`To indicate location please <b>SEND LOCATION</b> having dragged the marker to the needed place as shown below:`);
-                await ctx.replyWithPhoto('https://iuriid.github.io/public/img/gtpb-how_to_send_location.png');
 
                 // Get a random Street View image in a given coordinates square (stored in user's state)
                 let streetView = await randomStreetView(state[userId].bounds.northeast.lat,
@@ -150,7 +123,7 @@ bot.on('message', async ctx => {
                 state[userId]['balance'] = newBalance;
 
                 // Check if user's balance is >0
-                if (newBalance <= 0) {
+                if (newBalance<=0) {
                     await ctx.replyWithHTML(`<b>Ups.. looks like you lost. Try again?</b>`, Markup
                         .keyboard(['Restart'])
                         .oneTime()
@@ -166,18 +139,18 @@ bot.on('message', async ctx => {
                     );
                     state[userId]['should be'] = 'next question';
                 }
-
+            }
 
             // User is answering and clicked 'Restart' - update state, ask to choose city to start
-            } else if (ctx.update.message.text === 'Restart') {
+            if (ctx.update.message.text === 'Restart') {
                 await ctx.reply('Ok, let\'s start afresh. Please type in a city');
                 state[userId] = {'should be': 'choosing city'};
-
+            }
 
             // User is answering and clicked 'Hint' - give him/her a photo from the same place but with random heading
             // (supposed to be to a different direction but occasionally may be almost the same)
             // User's state remains the same ('answering')
-            } else if (ctx.update.message.text === 'Hint') {
+            if (ctx.update.message.text === 'Hint') {
                 let balanceWas = state[userId]['balance'];
                 let newBalance = state[userId]['balance'] - params.getHint;
                 state[userId]['balance'] = newBalance;
@@ -194,18 +167,9 @@ bot.on('message', async ctx => {
                     await ctx.replyWithHTML(`Ok, here's another photo from the same place\nYour balance is <b>${balanceWas} - ${params.getHint} = ${newBalance}</b>`);
 
                     let randHeading = Math.random() * 360;
-                    await ctx.replyWithPhoto(`https://maps.googleapis.com/maps/api/streetview?size=${params.imageWidth}x${params.imageHeight}&location=${state[userId].exactLocation.lat},${state[userId].exactLocation.lng}&heading=${randHeading}&key=${GOOGLE_MAPS_API_KEY}`);
+                    await ctx.replyWithPhoto(`https://maps.googleapis.com/maps/api/streetview?size=400x400&location=${state[userId].exactLocation.lat},${state[userId].exactLocation.lng}&heading=${randHeading}&key=${GOOGLE_MAPS_API_KEY}`);
 
-                    await ctx.replyWithHTML('Where is this place?\nTo indicate location please <b>SEND LOCATION</b> having dragged the marker to the needed place', Markup
-                        .keyboard(['Pass', 'Hint', 'Restart'])
-                        .oneTime()
-                        .resize()
-                        .extra()
-                    );
-                }
-            } else {
-                if (!ctx.update.message.location) {
-                    await ctx.replyWithHTML('Please <b>SEND LOCATION</b> or use the menu below', Markup
+                    await ctx.replyWithHTML('Where is this place?\nTo indicate location please <b>send a location</b> having dragged the marker to the needed place', Markup
                         .keyboard(['Pass', 'Hint', 'Restart'])
                         .oneTime()
                         .resize()
@@ -218,7 +182,7 @@ bot.on('message', async ctx => {
             if (ctx.update.message.location) {
                 // Draw a static map image with 2 markers (actual place and user's guess) and a line between them
                 await ctx.reply(`Ok. Here's how your answer (red marker) corresponds to actual location (green marker):`);
-                await ctx.replyWithPhoto(`https://maps.googleapis.com/maps/api/staticmap?language=en&region=US&zoom=12&size=${params.imageWidth}x${params.imageHeight}&markers=color:green|${state[userId]['exactLocation']['lat']},${state[userId]['exactLocation']['lng']}&markers=color:red|${ctx.update.message.location.latitude},${ctx.update.message.location.longitude}&path=${state[userId]['exactLocation']['lat']},${state[userId]['exactLocation']['lng']}|${ctx.update.message.location.latitude},${ctx.update.message.location.longitude}&key=${GOOGLE_MAPS_API_KEY}`);
+                await ctx.replyWithPhoto(`https://maps.googleapis.com/maps/api/staticmap?language=en&region=US&zoom=12&size=400x400&markers=color:green|${state[userId]['exactLocation']['lat']},${state[userId]['exactLocation']['lng']}&markers=color:red|${ctx.update.message.location.latitude},${ctx.update.message.location.longitude}&path=${state[userId]['exactLocation']['lat']},${state[userId]['exactLocation']['lng']}|${ctx.update.message.location.latitude},${ctx.update.message.location.longitude}&key=${GOOGLE_MAPS_API_KEY}`);
                 await ctx.reply(`Here's the actual place that was asked: https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${state[userId].exactLocation.lat},${state[userId].exactLocation.lng}`);
 
 
@@ -243,7 +207,7 @@ bot.on('message', async ctx => {
                     summary = 'Excellent answer!';
                 }  else if (markerDistance/cityDistance >= params.goodAnswerLowerLimit && markerDistance/cityDistance < params.fairAnswerLowerLimit) { // if distance between user's marker and actual place is >=10% and <50% of city diagonal (km) - fair answer, +2
                     grade = 2;
-                    summary = 'Not bad but could be better ;)';
+                    summary = 'Not bad (but could be better) ;)';
                 } else if (markerDistance/cityDistance >= params.fairAnswerLowerLimit) { // if distance between user's marker and actual place is >=50% of city diagonal (km), -2
                     grade = -2;
                     summary = 'Missed! ;)';
@@ -282,7 +246,7 @@ bot.on('message', async ctx => {
             if (streetView.status === 'ok') {
                 await ctx.replyWithPhoto(streetView.payload.image);
 
-                await ctx.replyWithHTML('Where is this place?\nTo indicate location please <b>SEND LOCATION</b> having dragged the marker to the needed place', Markup
+                await ctx.replyWithHTML('Where is this place?\nTo indicate location please <b>send a location</b> having dragged the marker to the needed place', Markup
                     .keyboard(['Pass', 'Hint', 'Restart'])
                     .oneTime()
                     .resize()
@@ -368,10 +332,10 @@ async function randomStreetView(ne_x, ne_y, sw_x, sw_y) {
         let randLat = (Math.random() * Math.abs(Math.round(ne_x*1000000) - Math.round(sw_x*1000000)))/1000000 + Math.min(ne_x, sw_x);
         let randLng = (Math.random() * Math.abs(Math.round(ne_y*1000000) - Math.round(sw_y*1000000)))/1000000 + Math.min(ne_y, sw_y);
 
-        let metadataQuery = `https://maps.googleapis.com/maps/api/streetview/metadata?size=${params.imageWidth}x${params.imageHeight}&location=${randLat},${randLng}&key=${GOOGLE_MAPS_API_KEY}`;
-        let imageQuery = `https://maps.googleapis.com/maps/api/streetview?size=${params.imageWidth}x${params.imageHeight}&location=${randLat},${randLng}&key=${GOOGLE_MAPS_API_KEY}`;
+        let metadataQuery = `https://maps.googleapis.com/maps/api/streetview/metadata?size=400x400&location=${randLat},${randLng}&key=${GOOGLE_MAPS_API_KEY}`;
+        let imageQuery = `https://maps.googleapis.com/maps/api/streetview?size=400x400&location=${randLat},${randLng}&key=${GOOGLE_MAPS_API_KEY}`;
         // To limit images to outdoors only
-        //let imageQuery = `https://maps.googleapis.com/maps/api/streetview?size=${params.imageWidth}x${params.imageHeight}&source=outdoor&location=${randLat},${randLng}&key=${GOOGLE_MAPS_API_KEY}`;
+        //let imageQuery = `https://maps.googleapis.com/maps/api/streetview?size=400x400&source=outdoor&location=${randLat},${randLng}&key=${GOOGLE_MAPS_API_KEY}`;
         //let webMap = `https://www.google.com/maps/@${randLat},${randLng},14z`; // for testing
 
         /*
@@ -425,10 +389,10 @@ async function getStreetView(lat, lng, heading=false) {
     */
     let imageQuery = '';
     if (!heading) {
-        imageQuery = `https://maps.googleapis.com/maps/api/streetview?size=${params.imageWidth}x${params.imageHeight}&location=${lat},${lng}&key=${GOOGLE_MAPS_API_KEY}`;
+        imageQuery = `https://maps.googleapis.com/maps/api/streetview?size=400x400&location=${lat},${lng}&key=${GOOGLE_MAPS_API_KEY}`;
     } else {
         let randHeading = Math.random() * 360;
-        imageQuery = `https://maps.googleapis.com/maps/api/streetview?size=${params.imageWidth}x${params.imageHeight}&location=${lat},${lng}&heading=${randHeading}&key=${GOOGLE_MAPS_API_KEY}`;
+        imageQuery = `https://maps.googleapis.com/maps/api/streetview?size=400x400&location=${lat},${lng}&heading=${randHeading}&key=${GOOGLE_MAPS_API_KEY}`;
     }
 
     try {
@@ -483,48 +447,7 @@ function deg2rad(deg) {
 }
 
 
-async function getQuery(q) {
-    /*
-        Sending queries to our PostgreSQL DB
-    */
-    try {
-        const { Client } = require('pg');
-
-        // Credentials for AWS
-        /*
-        const user = "iuriidMaster";
-        const host = "guesstheplacedb.cchwc62hzris.us-east-1.rds.amazonaws.com";
-        const database = "guesstheplacedb";
-        const dbPort = 5432;
-        */
-
-        // Credentials for local machine
-        const user = "postgres";
-        const host = "localhost";
-        const database = "guesstheplace";
-        const dbPort = 5432;
-
-        const client = new Client({
-            user: user,
-            host: host,
-            database: database,
-            password: keys.postgreSQLKey,
-            port: dbPort,
-        });
-
-        client.connect();
-
-        let ourQuery = await client.query(q);
-        //console.log(JSON.stringify(ourQuery, null, 2));
-        client.end();
-        return JSON.stringify(ourQuery);
-    } catch (e) {
-        console.log(`Ups.. ${e}`);
-        return false;
-    }
-}
-
 // --------------------- Polling... --------------------------------------------------------------------------------- //
 // Not needed if using Webhooks and hosting on AWS Lambda
-bot.startPolling();
+//bot.startPolling();
 
