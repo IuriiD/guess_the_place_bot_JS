@@ -1,4 +1,4 @@
-// Version of the bot that doesn't use DB
+// Deployed to AWS Lambda
 
 'use strict';
 
@@ -53,7 +53,7 @@ bot.on('message', async ctx => {
             let cityOfInterest = await placeSearch(ctx.update.message.text);
 
             if (cityOfInterest.status === 'ok') {
-                await ctx.replyWithPhoto(`https://maps.googleapis.com/maps/api/staticmap?language=en&region=US&center=${cityOfInterest.payload.latitude},${cityOfInterest.payload.longitude}&zoom=12&size=400x400&key=${GOOGLE_MAPS_API_KEY}`);
+                await ctx.replyWithPhoto(`https://maps.googleapis.com/maps/api/staticmap?language=en&region=US&center=${cityOfInterest.payload.latitude},${cityOfInterest.payload.longitude}&zoom=12&size=${params.imageWidth}x${params.imageHeight}&key=${GOOGLE_MAPS_API_KEY}`);
 
                 await ctx.replyWithHTML(`Do you mean <b>${cityOfInterest.payload.city}</b>?`, Markup
                     .keyboard(['Right!', 'No - I\'ll enter another one'])
@@ -79,6 +79,8 @@ bot.on('message', async ctx => {
             // >> SUPPOSED (CORRECT/MAIN) CONVERSATION FLOW
             if (ctx.update.message.text === 'Right!') {
                 await ctx.replyWithHTML(`Ok, here we go ;)\nHere are the rules:\n- initial score: <b>${params.initialScore}</b>\n- skip image: <b>-${params.skipImage}</b>\n- get a hint: <b>-${params.getHint}</b>\n- poor answer: <b>-${params.poorAnswer}</b>\n- fair answer: <b>+${params.fairAnswer}</b>\n- good answer: <b>+${params.goodAnswer}</b>`);
+                await ctx.replyWithHTML(`To indicate location please <b>SEND LOCATION</b> having dragged the marker to the needed place as shown below:`);
+                await ctx.replyWithPhoto('https://iuriid.github.io/public/img/gtpb-how_to_send_location.png');
 
                 // Get a random Street View image in a given coordinates square (stored in user's state)
                 let streetView = await randomStreetView(state[userId].bounds.northeast.lat,
@@ -123,7 +125,7 @@ bot.on('message', async ctx => {
                 state[userId]['balance'] = newBalance;
 
                 // Check if user's balance is >0
-                if (newBalance<=0) {
+                if (newBalance <= 0) {
                     await ctx.replyWithHTML(`<b>Ups.. looks like you lost. Try again?</b>`, Markup
                         .keyboard(['Restart'])
                         .oneTime()
@@ -139,18 +141,16 @@ bot.on('message', async ctx => {
                     );
                     state[userId]['should be'] = 'next question';
                 }
-            }
 
             // User is answering and clicked 'Restart' - update state, ask to choose city to start
-            if (ctx.update.message.text === 'Restart') {
+            } else if (ctx.update.message.text === 'Restart') {
                 await ctx.reply('Ok, let\'s start afresh. Please type in a city');
                 state[userId] = {'should be': 'choosing city'};
-            }
 
             // User is answering and clicked 'Hint' - give him/her a photo from the same place but with random heading
             // (supposed to be to a different direction but occasionally may be almost the same)
             // User's state remains the same ('answering')
-            if (ctx.update.message.text === 'Hint') {
+            } else if (ctx.update.message.text === 'Hint') {
                 let balanceWas = state[userId]['balance'];
                 let newBalance = state[userId]['balance'] - params.getHint;
                 state[userId]['balance'] = newBalance;
@@ -167,9 +167,18 @@ bot.on('message', async ctx => {
                     await ctx.replyWithHTML(`Ok, here's another photo from the same place\nYour balance is <b>${balanceWas} - ${params.getHint} = ${newBalance}</b>`);
 
                     let randHeading = Math.random() * 360;
-                    await ctx.replyWithPhoto(`https://maps.googleapis.com/maps/api/streetview?size=400x400&location=${state[userId].exactLocation.lat},${state[userId].exactLocation.lng}&heading=${randHeading}&key=${GOOGLE_MAPS_API_KEY}`);
+                    await ctx.replyWithPhoto(`https://maps.googleapis.com/maps/api/streetview?size=${params.imageWidth}x${params.imageHeight}&location=${state[userId].exactLocation.lat},${state[userId].exactLocation.lng}&heading=${randHeading}&key=${GOOGLE_MAPS_API_KEY}`);
 
-                    await ctx.replyWithHTML('Where is this place?\nTo indicate location please <b>send a location</b> having dragged the marker to the needed place', Markup
+                    await ctx.replyWithHTML('Where is this place?\nTo indicate location please <bSEND LOCATION</b> having dragged the marker to the needed place', Markup
+                        .keyboard(['Pass', 'Hint', 'Restart'])
+                        .oneTime()
+                        .resize()
+                        .extra()
+                    );
+                }
+            } else {
+                if (!ctx.update.message.location) {
+                    await ctx.replyWithHTML('Please <b>SEND LOCATION</b> or use the menu below', Markup
                         .keyboard(['Pass', 'Hint', 'Restart'])
                         .oneTime()
                         .resize()
@@ -182,7 +191,7 @@ bot.on('message', async ctx => {
             if (ctx.update.message.location) {
                 // Draw a static map image with 2 markers (actual place and user's guess) and a line between them
                 await ctx.reply(`Ok. Here's how your answer (red marker) corresponds to actual location (green marker):`);
-                await ctx.replyWithPhoto(`https://maps.googleapis.com/maps/api/staticmap?language=en&region=US&zoom=12&size=400x400&markers=color:green|${state[userId]['exactLocation']['lat']},${state[userId]['exactLocation']['lng']}&markers=color:red|${ctx.update.message.location.latitude},${ctx.update.message.location.longitude}&path=${state[userId]['exactLocation']['lat']},${state[userId]['exactLocation']['lng']}|${ctx.update.message.location.latitude},${ctx.update.message.location.longitude}&key=${GOOGLE_MAPS_API_KEY}`);
+                await ctx.replyWithPhoto(`https://maps.googleapis.com/maps/api/staticmap?language=en&region=US&zoom=12&size=${params.imageWidth}x${params.imageHeight}&markers=color:green|${state[userId]['exactLocation']['lat']},${state[userId]['exactLocation']['lng']}&markers=color:red|${ctx.update.message.location.latitude},${ctx.update.message.location.longitude}&path=${state[userId]['exactLocation']['lat']},${state[userId]['exactLocation']['lng']}|${ctx.update.message.location.latitude},${ctx.update.message.location.longitude}&key=${GOOGLE_MAPS_API_KEY}`);
                 await ctx.reply(`Here's the actual place that was asked: https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${state[userId].exactLocation.lat},${state[userId].exactLocation.lng}`);
 
 
@@ -246,7 +255,7 @@ bot.on('message', async ctx => {
             if (streetView.status === 'ok') {
                 await ctx.replyWithPhoto(streetView.payload.image);
 
-                await ctx.replyWithHTML('Where is this place?\nTo indicate location please <b>send a location</b> having dragged the marker to the needed place', Markup
+                await ctx.replyWithHTML('Where is this place?\nTo indicate location please <b>SEND LOCATION</b> having dragged the marker to the needed place', Markup
                     .keyboard(['Pass', 'Hint', 'Restart'])
                     .oneTime()
                     .resize()
@@ -332,10 +341,10 @@ async function randomStreetView(ne_x, ne_y, sw_x, sw_y) {
         let randLat = (Math.random() * Math.abs(Math.round(ne_x*1000000) - Math.round(sw_x*1000000)))/1000000 + Math.min(ne_x, sw_x);
         let randLng = (Math.random() * Math.abs(Math.round(ne_y*1000000) - Math.round(sw_y*1000000)))/1000000 + Math.min(ne_y, sw_y);
 
-        let metadataQuery = `https://maps.googleapis.com/maps/api/streetview/metadata?size=400x400&location=${randLat},${randLng}&key=${GOOGLE_MAPS_API_KEY}`;
-        let imageQuery = `https://maps.googleapis.com/maps/api/streetview?size=400x400&location=${randLat},${randLng}&key=${GOOGLE_MAPS_API_KEY}`;
+        let metadataQuery = `https://maps.googleapis.com/maps/api/streetview/metadata?size=${params.imageWidth}x${params.imageHeight}&location=${randLat},${randLng}&key=${GOOGLE_MAPS_API_KEY}`;
+        let imageQuery = `https://maps.googleapis.com/maps/api/streetview?size=${params.imageWidth}x${params.imageHeight}&location=${randLat},${randLng}&key=${GOOGLE_MAPS_API_KEY}`;
         // To limit images to outdoors only
-        //let imageQuery = `https://maps.googleapis.com/maps/api/streetview?size=400x400&source=outdoor&location=${randLat},${randLng}&key=${GOOGLE_MAPS_API_KEY}`;
+        //let imageQuery = `https://maps.googleapis.com/maps/api/streetview?size=${params.imageWidth}x${params.imageHeight}&source=outdoor&location=${randLat},${randLng}&key=${GOOGLE_MAPS_API_KEY}`;
         //let webMap = `https://www.google.com/maps/@${randLat},${randLng},14z`; // for testing
 
         /*
@@ -389,10 +398,10 @@ async function getStreetView(lat, lng, heading=false) {
     */
     let imageQuery = '';
     if (!heading) {
-        imageQuery = `https://maps.googleapis.com/maps/api/streetview?size=400x400&location=${lat},${lng}&key=${GOOGLE_MAPS_API_KEY}`;
+        imageQuery = `https://maps.googleapis.com/maps/api/streetview?size=${params.imageWidth}x${params.imageHeight}&location=${lat},${lng}&key=${GOOGLE_MAPS_API_KEY}`;
     } else {
         let randHeading = Math.random() * 360;
-        imageQuery = `https://maps.googleapis.com/maps/api/streetview?size=400x400&location=${lat},${lng}&heading=${randHeading}&key=${GOOGLE_MAPS_API_KEY}`;
+        imageQuery = `https://maps.googleapis.com/maps/api/streetview?size=${params.imageWidth}x${params.imageHeight}&location=${lat},${lng}&heading=${randHeading}&key=${GOOGLE_MAPS_API_KEY}`;
     }
 
     try {

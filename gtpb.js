@@ -27,42 +27,82 @@ bot.command(['start', 'restart'], async ctx => {
     const username = ctx.from.first_name;
     const userId = ctx.from.id;
 
+    // If session with user is not in active memory of this invocation of this function..
     if (!state[userId]) {
         // Let's check if user already played in previous invocation of function on AWS
         let q = `SELECT * FROM ${params.usersTable} WHERE telegram_id=${userId}`;
         let dbResponse = await getQuery(q);
         let dbResponseParsed = JSON.parse(dbResponse);
         console.log(dbResponseParsed);
-        if (dbResponseParsed.rows[0].count!=='0') {
-            let lastCity = dbResponseParsed.rows[0].last_city;
+        if (dbResponseParsed.rows.length>0 && dbResponseParsed.rows[0].count!=='0') {
             await ctx.reply(`Welcome back, ${username}!`);
-            await ctx.replyWithHTML('To start please type in a city', Markup
-                .keyboard([lastCity])
-                .oneTime()
-                .resize()
-                .extra());
+            if (dbResponseParsed.rows[0].last_city) {
+                let lastCity = dbResponseParsed.rows[0].last_city;
+                await ctx.replyWithHTML('To start please type in a city', Markup
+                    .keyboard([lastCity])
+                    .oneTime()
+                    .resize()
+                    .extra());
+            } else {
+                await ctx.replyWithHTML('To start please type in a city');
+            }
+
+
+        // Completely new user - not in DB yet
         } else {
             await ctx.reply(`Hi, ${username} I'm a GuessThePlaceBot`);
             await ctx.replyWithHTML('Do you know your city well? \nWill you recognize a place by photo?');
             await ctx.replyWithHTML('To start please type in a city');
+
+            let q = `INSERT INTO ${params.usersTable}(telegram_id, first_name) VALUES(${userId}, '${username}');`;
+            let dbResponse = await getQuery(q);
+            let dbResponseParsed = JSON.parse(dbResponse);
+            console.log(`here: ${dbResponseParsed}`);
+        }
+
+    // Session with the user is in the active memory of function (this very invocation)
+    } else {
+        let q = `SELECT * FROM ${params.usersTable} WHERE telegram_id=${userId}`;
+        let dbResponse = await getQuery(q);
+        let dbResponseParsed = JSON.parse(dbResponse);
+        if (dbResponseParsed.rows.length>0 && dbResponseParsed.rows[0].count !== '0') {
+            if (dbResponseParsed.rows[0].last_city) {
+                let lastCity = dbResponseParsed.rows[0].last_city;
+                await ctx.replyWithHTML('To start please type in a city', Markup
+                    .keyboard([lastCity])
+                    .oneTime()
+                    .resize()
+                    .extra());
+            } else {
+                await ctx.replyWithHTML('To start please type in a city');
+            }
+        } else {
+            await ctx.reply(`Hi, ${username} I'm a GuessThePlaceBot`);
+            await ctx.replyWithHTML('Do you know your city well? \nWill you recognize a place by photo?');
+            await ctx.replyWithHTML('To start please type in a city');
+
+            let q = `INSERT INTO ${params.usersTable}(telegram_id, first_name) VALUES(${userId}, '${username}');`;
+            let dbResponse = await getQuery(q);
+            let dbResponseParsed = JSON.parse(dbResponse);
+            console.log(dbResponseParsed);
         }
     }
 
-    // let's remember that user with given ID was prompted to choose a city
-    state[userId] = {'should be': 'choosing city'};
+        // let's remember that user with given ID was prompted to choose a city
+        state[userId] = {'should be': 'choosing city'};
 
-    // Let's save user's Telegram ID and first name to our DB
-    // Table 'users': CREATE TABLE users(telegram_id INT PRIMARY KEY, first_name TEXT, last_city TEXT, last_city_bounds JSON, last_score INT, top_score INT);
-    // INSERT INTO users(telegram_id, first_name, last_city, last_city_bounds, last_score, top_score) VALUES (178180819, 'Iurii', 'Cherkasy', '{"bounds":{"northeast":{"lat":49.4976831,"lng":32.140585},"southwest":{"lat":49.364583,"lng":31.9578749}}}', 12, 20);
+        // Let's save user's Telegram ID and first name to our DB
+        // Table 'users': CREATE TABLE users(telegram_id INT PRIMARY KEY, first_name TEXT, last_city TEXT, last_city_bounds JSON, last_score INT, top_score INT);
+        // INSERT INTO users(telegram_id, first_name, last_city, last_city_bounds, last_score, top_score) VALUES (178180819, 'Iurii', 'Cherkasy', '{"bounds":{"northeast":{"lat":49.4976831,"lng":32.140585},"southwest":{"lat":49.364583,"lng":31.9578749}}}', 12, 20);
 
-    /*
-    let q = `SELECT * FROM ${proverbsTable} where id=${nextProverbID}`;
-    let dbResponse = await getQuery(q);
-    let dbResponseParsed = JSON.parse(dbResponse);
-    let proverbStarts = dbResponseParsed.rows[0].proverbstarts;
-    users[sessionId].anwserVariants = dbResponseParsed.rows[0].proverbends;
-    */
-});
+        /*
+        let q = `SELECT * FROM ${proverbsTable} where id=${nextProverbID}`;
+        let dbResponse = await getQuery(q);
+        let dbResponseParsed = JSON.parse(dbResponse);
+        let proverbStarts = dbResponseParsed.rows[0].proverbstarts;
+        users[sessionId].anwserVariants = dbResponseParsed.rows[0].proverbends;
+        */
+    });
 
 bot.on('message', async ctx => {
     console.log(ctx.message);
@@ -275,23 +315,39 @@ bot.on('message', async ctx => {
 
         // User either passed a question or answered it and clicked the button 'Next question'
         } else if (state[userId]['should be'] === 'next question') {
-            // Get a random Street View image in a given coordinates square (stored in user's state)
-            let streetView = await randomStreetView(state[userId].bounds.northeast.lat,
-                state[userId].bounds.northeast.lng, state[userId].bounds.southwest.lat, state[userId].bounds.southwest.lng);
+            if (ctx.update.message.text === 'Restart') {
+                let q = `SELECT * FROM ${params.usersTable} WHERE telegram_id=${userId}`;
+                let dbResponse = await getQuery(q);
+                let dbResponseParsed = JSON.parse(dbResponse);
+                if (dbResponseParsed.rows[0].count !== '0') {
+                    let lastCity = dbResponseParsed.rows[0].last_city;
+                    await ctx.replyWithHTML('Ok, let\'s start afresh. Please type in a city', Markup
+                        .keyboard([lastCity])
+                        .oneTime()
+                        .resize()
+                        .extra());
+                }
+                state[userId] = {'should be': 'choosing city'};
 
-            if (streetView.status === 'ok') {
-                await ctx.replyWithPhoto(streetView.payload.image);
+            } else if (ctx.update.message.text === 'Next question') {
+                // Get a random Street View image in a given coordinates square (stored in user's state)
+                let streetView = await randomStreetView(state[userId].bounds.northeast.lat,
+                    state[userId].bounds.northeast.lng, state[userId].bounds.southwest.lat, state[userId].bounds.southwest.lng);
 
-                await ctx.replyWithHTML('Where is this place?\nTo indicate location please <b>SEND LOCATION</b> having dragged the marker to the needed place', Markup
-                    .keyboard(['Pass', 'Hint', 'Restart'])
-                    .oneTime()
-                    .resize()
-                    .extra()
-                );
+                if (streetView.status === 'ok') {
+                    await ctx.replyWithPhoto(streetView.payload.image);
 
-                // Update user's state - save the coordinates of place that was shown, state='answering', (initial) balance=20
-                state[userId]['exactLocation'] = streetView.payload.exactLocation;
-                state[userId]['should be'] = 'answering';
+                    await ctx.replyWithHTML('Where is this place?\nTo indicate location please <b>SEND LOCATION</b> having dragged the marker to the needed place', Markup
+                        .keyboard(['Pass', 'Hint', 'Restart'])
+                        .oneTime()
+                        .resize()
+                        .extra()
+                    );
+
+                    // Update user's state - save the coordinates of place that was shown, state='answering', (initial) balance=20
+                    state[userId]['exactLocation'] = streetView.payload.exactLocation;
+                    state[userId]['should be'] = 'answering';
+                }
             }
 
         // This will be our Default Fallback intent for already contacted users
