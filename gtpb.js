@@ -1,5 +1,11 @@
 // Bot version using database
 
+// Commands registered via BotFather:
+/*
+/restart - Start a new game
+/help - Get additional info
+*/
+
 'use strict';
 
 const Telegraf = require('telegraf');
@@ -35,24 +41,24 @@ bot.command(['start', 'restart'], async ctx => {
         let dbResponseParsed = JSON.parse(dbResponse);
         console.log(dbResponseParsed);
         if (dbResponseParsed.rows.length>0 && dbResponseParsed.rows[0].count!=='0') {
-            await ctx.reply(`Welcome back, ${username}!`);
+            await ctx.replyWithHTML(`Welcome back, <b>${username}</b>!`);
             if (dbResponseParsed.rows[0].last_city) {
                 let lastCity = dbResponseParsed.rows[0].last_city;
-                await ctx.replyWithHTML('To start please type in a city', Markup
+                await ctx.replyWithHTML('To start please <b>type in a city</b>', Markup
                     .keyboard([lastCity])
                     .oneTime()
                     .resize()
                     .extra());
             } else {
-                await ctx.replyWithHTML('To start please type in a city');
+                await ctx.replyWithHTML('To start please <b>type in a city</b>');
             }
 
 
         // Completely new user - not in DB yet
         } else {
-            await ctx.reply(`Hi, ${username} I'm a GuessThePlaceBot`);
+            await ctx.replyWithHTML(`Hi, <b>${username}</b>! I'm a GuessThePlaceBot`);
             await ctx.replyWithHTML('Do you know your city well? \nWill you recognize a place by photo?');
-            await ctx.replyWithHTML('To start please type in a city');
+            await ctx.replyWithHTML('To start please <b>type in a city</b>');
 
             let q = `INSERT INTO ${params.usersTable}(telegram_id, first_name) VALUES(${userId}, '${username}');`;
             let dbResponse = await getQuery(q);
@@ -68,18 +74,18 @@ bot.command(['start', 'restart'], async ctx => {
         if (dbResponseParsed.rows.length>0 && dbResponseParsed.rows[0].count !== '0') {
             if (dbResponseParsed.rows[0].last_city) {
                 let lastCity = dbResponseParsed.rows[0].last_city;
-                await ctx.replyWithHTML('To start please type in a city', Markup
+                await ctx.replyWithHTML('To start please <b>type in a city</b>', Markup
                     .keyboard([lastCity])
                     .oneTime()
                     .resize()
                     .extra());
             } else {
-                await ctx.replyWithHTML('To start please type in a city');
+                await ctx.replyWithHTML('To start please <b>type in a city</b>');
             }
         } else {
-            await ctx.reply(`Hi, ${username} I'm a GuessThePlaceBot`);
+            await ctx.replyWithHTML(`Hi, <b>${username}</b>! I'm a GuessThePlaceBot`);
             await ctx.replyWithHTML('Do you know your city well? \nWill you recognize a place by photo?');
-            await ctx.replyWithHTML('To start please type in a city');
+            await ctx.replyWithHTML('To start please <b>type in a city</b>');
 
             let q = `INSERT INTO ${params.usersTable}(telegram_id, first_name) VALUES(${userId}, '${username}');`;
             let dbResponse = await getQuery(q);
@@ -94,15 +100,20 @@ bot.command(['start', 'restart'], async ctx => {
         // Let's save user's Telegram ID and first name to our DB
         // Table 'users': CREATE TABLE users(telegram_id INT PRIMARY KEY, first_name TEXT, last_city TEXT, last_city_bounds JSON, last_score INT, top_score INT);
         // INSERT INTO users(telegram_id, first_name, last_city, last_city_bounds, last_score, top_score) VALUES (178180819, 'Iurii', 'Cherkasy', '{"bounds":{"northeast":{"lat":49.4976831,"lng":32.140585},"southwest":{"lat":49.364583,"lng":31.9578749}}}', 12, 20);
-
-        /*
-        let q = `SELECT * FROM ${proverbsTable} where id=${nextProverbID}`;
-        let dbResponse = await getQuery(q);
-        let dbResponseParsed = JSON.parse(dbResponse);
-        let proverbStarts = dbResponseParsed.rows[0].proverbstarts;
-        users[sessionId].anwserVariants = dbResponseParsed.rows[0].proverbends;
-        */
     });
+
+
+bot.command(['help'], async ctx => {
+    const username = ctx.from.first_name;
+
+    await ctx.replyWithHTML(`Hey, <b>${username}</b>!\nThanks for trying @GuessThePlaceBot!\n\nHere's some info you may need:\n<b>/start, /restart</b> - Start a new game\n<b>Hint</b> - Get another photo from the same place but in another (random) direction (-${params.getHint})\n<b>Pass</b> - Skip the question (-${params.skipImage})`);
+    await ctx.replyWithHTML('\nTo send location while answering a question:');
+    await ctx.replyWithPhoto('https://iuriid.github.io/public/img/gtpb-how_to_send_location.png');
+    await ctx.reply(`\n(c) Iurii Dziuban - August 2018\nConsider visiting my online-portfolio:`, Markup.inlineKeyboard([
+            Markup.urlButton('iuriid.github.io', 'https://iuriid.github.io/'),
+        ]).extra())
+});
+
 
 bot.on('message', async ctx => {
     console.log(ctx.message);
@@ -127,10 +138,23 @@ bot.on('message', async ctx => {
                     .extra()
                 );
 
+                // Save the city and its bounds to state (user hasn't confirmed them yet - if he/she confirms these data
+                // in state won't be changed, otherwise will save a different city/bounds in the next cycle)
                 state[userId] = {
                     'should be': 'confirming city',
                     'bounds': cityOfInterest.payload.bounds
                 };
+
+                // Save same data to DB
+                console.log('Data inserted to DB');
+                console.log(`last_city: ${ctx.update.message.text}`);
+                console.log(`last_city_bounds: ${JSON.stringify(cityOfInterest.payload.bounds)}`);
+                console.log(`userId: ${userId}`);
+
+                let q = `UPDATE ${params.usersTable} SET last_city='${ctx.update.message.text}', last_city_bounds='{"bounds":${JSON.stringify(cityOfInterest.payload.bounds)}}' WHERE telegram_id=${userId};`;
+                let dbResponse = await getQuery(q);
+                let dbResponseParsed = JSON.parse(dbResponse);
+                console.log(dbResponseParsed);
 
             } else {
                 await ctx.reply(`Sorry but I failed to determine what is "${ctx.update.message.text}". Could you please enter another city?`);
@@ -143,7 +167,7 @@ bot.on('message', async ctx => {
             // .. and answered positively ('Right')
             // >> SUPPOSED (CORRECT/MAIN) CONVERSATION FLOW
             if (ctx.update.message.text === 'Right!') {
-                await ctx.replyWithHTML(`Ok, here we go ;)\nHere are the rules:\n- initial score: <b>${params.initialScore}</b>\n- skip image: <b>-${params.skipImage}</b>\n- get a hint: <b>-${params.getHint}</b>\n- poor answer: <b>-${params.poorAnswer}</b>\n- fair answer: <b>+${params.fairAnswer}</b>\n- good answer: <b>+${params.goodAnswer}</b>`);
+                await ctx.replyWithHTML(`Ok, here we go ;)\n<b>Here are the rules:</b>\n- initial score: <b>${params.initialScore}</b>\n- skip image: <b>-${params.skipImage}</b>\n- get a hint: <b>-${params.getHint}</b>\n- poor answer: <b>-${params.poorAnswer}</b>\n- fair answer: <b>+${params.fairAnswer}</b>\n- good answer: <b>+${params.goodAnswer}</b>`);
                 await ctx.replyWithHTML(`To indicate location please <b>SEND LOCATION</b> having dragged the marker to the needed place as shown below:`);
                 await ctx.replyWithPhoto('https://iuriid.github.io/public/img/gtpb-how_to_send_location.png');
 
@@ -170,6 +194,9 @@ bot.on('message', async ctx => {
                     state[userId]['exactLocation'] = streetView.payload.exactLocation;
                     state[userId]['should be'] = 'answering';
                     state[userId]['balance'] = params.initialScore;
+
+                    // Update last and top (if needed) score in DB
+                    await scoresUpdate(params.usersTable, userId, params.initialScore);
                 }
 
                 // ... and answered negatively ('No - I'll enter another one')
@@ -210,7 +237,7 @@ bot.on('message', async ctx => {
 
             // User is answering and clicked 'Restart' - update state, ask to choose city to start
             } else if (ctx.update.message.text === 'Restart') {
-                await ctx.reply('Ok, let\'s start afresh. Please type in a city');
+                await ctx.replyWithHTML('Ok, let\'s start afresh. Please <b>type in a city</b>');
                 state[userId] = {'should be': 'choosing city'};
 
 
@@ -321,7 +348,7 @@ bot.on('message', async ctx => {
                 let dbResponseParsed = JSON.parse(dbResponse);
                 if (dbResponseParsed.rows[0].count !== '0') {
                     let lastCity = dbResponseParsed.rows[0].last_city;
-                    await ctx.replyWithHTML('Ok, let\'s start afresh. Please type in a city', Markup
+                    await ctx.replyWithHTML('Ok, let\'s start afresh. Please <b>type in a city</b>', Markup
                         .keyboard([lastCity])
                         .oneTime()
                         .resize()
@@ -352,7 +379,7 @@ bot.on('message', async ctx => {
 
         // This will be our Default Fallback intent for already contacted users
         } else {
-            ctx.replyWithHTML('To start please type in a city');
+            ctx.replyWithHTML('To start please <b>type in a city</b>');
             state[userId]['should be'] = 'choosing city';
         }
     } else {
@@ -361,7 +388,7 @@ bot.on('message', async ctx => {
         const username = ctx.from.first_name;
         await ctx.reply(`Hi, ${username}! I'm a GuessThePlaceBot`);
         await ctx.replyWithHTML('Do you know your city well? \nWill you recognize a place by photo?');
-        ctx.replyWithHTML('To start please type in a city');
+        ctx.replyWithHTML('To start please <b>type in a city</b>');
         state[userId] = {'should be': 'choosing city'};
     }
 
@@ -575,7 +602,29 @@ async function getQuery(q) {
         client.end();
         return JSON.stringify(ourQuery);
     } catch (e) {
-        console.log(`Ups.. ${e}`);
+        console.log(`Ups from getQuery(): ${e}`);
+        return false;
+    }
+}
+
+
+async function scoresUpdate(usersTable, userId, score) {
+    try {
+        let q = `SELECT top_score FROM ${usersTable} WHERE telegram_id=${userId}`;
+        let dbResponse = await getQuery(q);
+        let dbResponseParsed = JSON.parse(dbResponse);
+        console.log(dbResponseParsed);
+        if (dbResponseParsed.rows[0].top_score===null || (dbResponseParsed.rows[0].top_score!==null && dbResponse.rows[0].top_score<score)) {
+            q = `UPDATE ${usersTable} SET last_score=${score}, top_score=${score} WHERE telegram_id=${userId};`;
+        } else {
+            q = `UPDATE ${usersTable} SET last_score=${score} WHERE telegram_id=${userId};`;
+        }
+
+        dbResponse = await getQuery(q);
+        dbResponseParsed = JSON.parse(dbResponse);
+        console.log(dbResponseParsed);
+    } catch (e) {
+        console.log(`Ups from scoresUpdate(): ${e}`);
         return false;
     }
 }
