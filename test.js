@@ -242,3 +242,36 @@ async function test(userId) {
 }
 
 test(178180819);
+
+const some = {
+    "address_components":[
+        {
+            "long_name":"Cherkasy",
+            "short_name":"Cherkasy",
+            "types":["locality","political"]
+        },
+        {
+            "long_name":"Cherkas'ka city council",
+            "short_name":"Cherkas'ka city council",
+            "types":["administrative_area_level_3","political"]
+        },
+        {
+            "long_name":"Cherkasy Oblast",
+            "short_name":"Cherkasy Oblast",
+            "types":["administrative_area_level_1","political"]
+        },
+        {
+            "long_name":"Ukraine",
+            "short_name":"UA",
+            "types":["country","political"]
+        },
+        {
+            "long_name":"18000","short_name":"18000","types":["postal_code"]
+        }
+        ],
+    "formatted_address":"Cherkasy, Cherkasy Oblast, Ukraine, 18000",
+    "geometry":{
+        "bounds":{"northeast":{"lat":49.4976831,"lng":32.140585},
+            "southwest":{"lat":49.364583,"lng":31.9578749}
+            },
+        "location":{"lat":49.444433,"lng":32.059767},"location_type":"APPROXIMATE","viewport":{"northeast":{"lat":49.4976831,"lng":32.140585},"southwest":{"lat":49.364583,"lng":31.9578749}}},"place_id":"ChIJf5dkYIZL0UAR2LXLqSPn3Pg","types":["locality","political"]}
