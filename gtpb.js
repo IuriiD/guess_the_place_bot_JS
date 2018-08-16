@@ -165,7 +165,6 @@ bot.on('message', async ctx => {
                         .extra()
                     );
 
-                    console.log(`\n\n\nexact_location='${JSON.stringify(streetView.payload.exactLocation)}'`);
                     // Update user's state - save the coordinates of place that was shown, state='answering'
                     let q = `UPDATE ${params.usersTable} SET exact_location='${JSON.stringify(streetView.payload.exactLocation)}', should_be='answering' WHERE telegram_id=${userId};`;
                     await getQuery(q);
@@ -196,7 +195,9 @@ bot.on('message', async ctx => {
                 if (dbResponseParsed) console.log('Here6');
 
                 await ctx.reply('Ok. This place was here:');
-                await ctx.reply(`https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${dbResponseParsed.rows[0]['exact_location']['lat']},${dbResponseParsed.rows[0]['exact_location']['lng']}`);
+                await ctx.replyWithPhoto(`https://maps.googleapis.com/maps/api/staticmap?language=en&region=US&zoom=12&size=${params.imageWidth}x${params.imageHeight}&markers=color:green|${dbResponseParsed.rows[0]['exact_location']['lat']},${dbResponseParsed.rows[0]['exact_location']['lng']}&key=${GOOGLE_MAPS_API_KEY}`);
+                await ctx.reply(`Check it on Google Street View:\nhttps://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${dbResponseParsed.rows[0]['exact_location']['lat']},${dbResponseParsed.rows[0]['exact_location']['lng']}`);
+
                 let balanceWas = dbResponseParsed.rows[0]['last_score'];
                 let newBalance = dbResponseParsed.rows[0]['last_score'] - params.skipImage;
 
@@ -226,7 +227,12 @@ bot.on('message', async ctx => {
 
             // User is answering and clicked 'Restart' - update state, ask to choose city to start
             } else if (ctx.update.message.text === 'Restart') {
-                // Temp
+                // WTF? Can't understand why "ReferenceError: dbResponseParsed is not defined" in this block
+                // while in the block 'Pass' above and 'Hint' below it's 'defined'
+                // Might be some silly mistake...
+                let q = `SELECT * FROM ${params.usersTable} WHERE telegram_id=${userId}`;
+                let dbResponse = await getQuery(q);
+                let dbResponseParsed = JSON.parse(dbResponse);
                 if (dbResponseParsed) console.log('Here7');
 
                 if (dbResponseParsed.rows[0]['last_city']) {
@@ -242,16 +248,15 @@ bot.on('message', async ctx => {
                 }
 
                 // Update user's state to 'choosing city'
-                let q = `UPDATE ${params.usersTable} SET should_be='choosing city' WHERE telegram_id=${userId};`;
-                let dbResponse = await getQuery(q);
-                let dbResponseParsed = JSON.parse(dbResponse);
-                console.log(dbResponseParsed);
-
+                q = `UPDATE ${params.usersTable} SET should_be='choosing city' WHERE telegram_id=${userId};`;
+                await getQuery(q);
 
             // User is answering and clicked 'Hint' - give him/her a photo from the same place but with random heading
             // (supposed to be in a different direction but occasionally may be [almost] the same as original photo)
             // User's state remains the same ('answering')
             } else if (ctx.update.message.text === 'Hint') {
+                if (dbResponseParsed) console.log('Here8');
+
                 let balanceWas = dbResponseParsed.rows[0]['last_score'];
                 let newBalance = dbResponseParsed.rows[0]['last_score'] - params.getHint;
 
@@ -295,7 +300,7 @@ bot.on('message', async ctx => {
                 // Draw a static map image with 2 markers (actual place and user's guess) and a line between them
                 await ctx.reply(`Ok. Here's how your answer (red marker) corresponds to actual location (green marker):`);
                 await ctx.replyWithPhoto(`https://maps.googleapis.com/maps/api/staticmap?language=en&region=US&zoom=12&size=${params.imageWidth}x${params.imageHeight}&markers=color:green|${dbResponseParsed.rows[0]['exact_location']['lat']},${dbResponseParsed.rows[0]['exact_location']['lng']}&markers=color:red|${ctx.update.message.location.latitude},${ctx.update.message.location.longitude}&path=${dbResponseParsed.rows[0]['exact_location']['lat']},${dbResponseParsed.rows[0]['exact_location']['lng']}|${ctx.update.message.location.latitude},${ctx.update.message.location.longitude}&key=${GOOGLE_MAPS_API_KEY}`);
-                await ctx.reply(`Here's the actual place that was asked: https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${dbResponseParsed.rows[0]['exact_location']['lat']},${dbResponseParsed.rows[0]['exact_location']['lng']}`);
+                await ctx.reply(`Here's the actual place on the Google Street View: \nhttps://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${dbResponseParsed.rows[0]['exact_location']['lat']},${dbResponseParsed.rows[0]['exact_location']['lng']}`);
 
 
                 // Calculate distance between two markers
