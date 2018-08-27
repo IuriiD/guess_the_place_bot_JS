@@ -39,6 +39,18 @@ bot.command(['start', 'restart'], async ctx => {
 });
 
 
+bot.command(['help'], async ctx => {
+    const username = ctx.from.first_name;
+
+    await ctx.replyWithHTML(`Hey, <b>${username}</b>!\nThanks for trying @GuessThePlaceBot!\n\nHere's some info you may need:\n<b>/start, /restart</b> - Start a new game\n<b>Hint</b> - Get another photo from the same place but in another (random) direction (-${params.getHint})\n<b>Pass</b> - Skip the question (-${params.skipImage})`);
+    await ctx.replyWithHTML('\nTo send location while answering a question (screenshots from iPhone):');
+    await ctx.replyWithPhoto('https://iuriid.github.io/public/img/gtpb-how_to_send_location.png');
+    await ctx.reply(`\n(c) Iurii Dziuban - August 2018\nConsider visiting my online-portfolio:`, Markup.inlineKeyboard([
+        Markup.urlButton('iuriid.github.io', 'https://iuriid.github.io/'),
+    ]).extra())
+});
+
+
 bot.on('message', async ctx => {
     console.log(ctx.message);
 
@@ -119,7 +131,9 @@ bot.on('message', async ctx => {
             // User is answering and clicked 'Pass' - show him/her actual location, update balance
             if (ctx.update.message.text === 'Pass') {
                 await ctx.reply('Ok. This place was here:');
-                await ctx.reply(`https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${state[userId].exactLocation.lat},${state[userId].exactLocation.lng}`);
+                await ctx.replyWithPhoto(`https://maps.googleapis.com/maps/api/staticmap?language=en&region=US&zoom=12&size=${params.imageWidth}x${params.imageHeight}&markers=color:green|${state[userId].exactLocation.lat},${state[userId].exactLocation.lng}&key=${GOOGLE_MAPS_API_KEY}`);
+                await ctx.reply(`Check it on Google Street View:\nhttps://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${state[userId].exactLocation.lat},${state[userId].exactLocation.lng}`);
+
                 let balanceWas = state[userId]['balance'];
                 let newBalance = state[userId]['balance'] - params.skipImage;
                 state[userId]['balance'] = newBalance;
@@ -164,7 +178,7 @@ bot.on('message', async ctx => {
                         .extra()
                     );
                 } else {
-                    await ctx.replyWithHTML(`Ok, here's another photo from the same place\nYour balance is <b>${balanceWas} - ${params.getHint} = ${newBalance}</b>`);
+                    await ctx.replyWithHTML(`Ok, here's another photo from the same place\nYour balance is <b>${balanceWas}-${params.getHint} = ${newBalance}</b>`);
 
                     let randHeading = Math.random() * 360;
                     await ctx.replyWithPhoto(`https://maps.googleapis.com/maps/api/streetview?size=${params.imageWidth}x${params.imageHeight}&location=${state[userId].exactLocation.lat},${state[userId].exactLocation.lng}&heading=${randHeading}&key=${GOOGLE_MAPS_API_KEY}`);
@@ -192,8 +206,7 @@ bot.on('message', async ctx => {
                 // Draw a static map image with 2 markers (actual place and user's guess) and a line between them
                 await ctx.reply(`Ok. Here's how your answer (red marker) corresponds to actual location (green marker):`);
                 await ctx.replyWithPhoto(`https://maps.googleapis.com/maps/api/staticmap?language=en&region=US&zoom=12&size=${params.imageWidth}x${params.imageHeight}&markers=color:green|${state[userId]['exactLocation']['lat']},${state[userId]['exactLocation']['lng']}&markers=color:red|${ctx.update.message.location.latitude},${ctx.update.message.location.longitude}&path=${state[userId]['exactLocation']['lat']},${state[userId]['exactLocation']['lng']}|${ctx.update.message.location.latitude},${ctx.update.message.location.longitude}&key=${GOOGLE_MAPS_API_KEY}`);
-                await ctx.reply(`Here's the actual place that was asked: https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${state[userId].exactLocation.lat},${state[userId].exactLocation.lng}`);
-
+                await ctx.reply(`Here's the actual place on the Google Street View: \nhttps://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${state[userId].exactLocation.lat},${state[userId].exactLocation.lng}`);
 
                 // Calculate distance between two markers
                 const markerDistance = await distanceBetweenMarkers(state[userId]['exactLocation']['lat'], state[userId]['exactLocation']['lng'], ctx.update.message.location.latitude, ctx.update.message.location.longitude);
@@ -216,7 +229,7 @@ bot.on('message', async ctx => {
                     summary = 'Excellent answer!';
                 }  else if (markerDistance/cityDistance >= params.goodAnswerLowerLimit && markerDistance/cityDistance < params.fairAnswerLowerLimit) { // if distance between user's marker and actual place is >=10% and <50% of city diagonal (km) - fair answer, +2
                     grade = 2;
-                    summary = 'Not bad (but could be better) ;)';
+                    summary = 'Not bad but could be better ;)';
                 } else if (markerDistance/cityDistance >= params.fairAnswerLowerLimit) { // if distance between user's marker and actual place is >=50% of city diagonal (km), -2
                     grade = -2;
                     summary = 'Missed! ;)';
@@ -235,7 +248,7 @@ bot.on('message', async ctx => {
                         .extra()
                     );
                 } else {
-                    await ctx.replyWithHTML(`Straight distance between the markers is ${distanceVerdict}\n${summary}\nYou balance is: <b>${balanceWas}${grade<0 ? '' : '+'} ${grade} = ${newBalance}</b>`, Markup
+                    await ctx.replyWithHTML(`Straight distance between the markers is ${distanceVerdict}\n${summary}\nYou balance is: <b>${balanceWas}${grade<0 ? '' : '+'}${grade} = ${newBalance}</b>`, Markup
                         .keyboard(['Next question', 'Restart'])
                         .oneTime()
                         .resize()

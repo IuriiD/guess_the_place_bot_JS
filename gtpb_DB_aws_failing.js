@@ -31,7 +31,6 @@ const bot = new Telegraf(keys.TELEGRAM_TOKEN);
 */
 // --------------------- Conversation logic ------------------------------------------------------------------------- //
 bot.command(['start', 'restart'], async ctx => {
-    console.log('Hello!');
     const username = ctx.from.first_name;
     const userId = ctx.from.id;
 
@@ -300,7 +299,6 @@ bot.on('message', async ctx => {
                 await ctx.reply(`Ok. Here's how your answer (red marker) corresponds to actual location (green marker):`);
                 await ctx.replyWithPhoto(`https://maps.googleapis.com/maps/api/staticmap?language=en&region=US&zoom=12&size=${params.imageWidth}x${params.imageHeight}&markers=color:green|${dbResponseParsed.rows[0]['exact_location']['lat']},${dbResponseParsed.rows[0]['exact_location']['lng']}&markers=color:red|${ctx.update.message.location.latitude},${ctx.update.message.location.longitude}&path=${dbResponseParsed.rows[0]['exact_location']['lat']},${dbResponseParsed.rows[0]['exact_location']['lng']}|${ctx.update.message.location.latitude},${ctx.update.message.location.longitude}&key=${GOOGLE_MAPS_API_KEY}`);
                 await ctx.reply(`Here's the actual place on the Google Street View: \nhttps://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${dbResponseParsed.rows[0]['exact_location']['lat']},${dbResponseParsed.rows[0]['exact_location']['lng']}`);
-
 
                 // Calculate distance between two markers
                 const markerDistance = await distanceBetweenMarkers(dbResponseParsed.rows[0]['exact_location']['lat'], dbResponseParsed.rows[0]['exact_location']['lng'], ctx.update.message.location.latitude, ctx.update.message.location.longitude);
