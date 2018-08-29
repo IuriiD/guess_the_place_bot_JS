@@ -413,12 +413,8 @@ bot.on('message', async ctx => {
 // --------------------- AWS Lambda handler function ---------------------------------------------------------------- //
 // https://github.com/telegraf/telegraf/issues/129
 exports.handler = (event, context, callback) => {
-    const tmp = JSON.parse(event.body); // get data passed to us
-    bot.handleUpdate(tmp); // make Telegraf process that data
-    return callback(null, { // return something for webhook, so it doesn't try to send same stuff again
-        statusCode: 200,
-        body: '',
-    });
+    bot.handleUpdate(JSON.parse(event.body)); // make Telegraf process that data
+    return callback(null, { statusCode: 200, body: JSON.stringify({ message: 'OK' }) });
 };
 
 

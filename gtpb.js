@@ -88,324 +88,326 @@ bot.command(['help'], async ctx => {
 
 
 bot.on('message', async ctx => {
-    console.log(ctx.message);
+    //console.log(ctx.message);
+    try {
+        const userId = ctx.from.id;
 
-    const userId = ctx.from.id;
+        // Check if user is in our DB (at least clicked /start with the bot)
+        let q = `SELECT * FROM ${params.usersTable} WHERE telegram_id=${userId}`;
+        let dbResponse = await getQuery(q);
+        let dbResponseParsed = JSON.parse(dbResponse);
 
-    // Check if user is in our DB (at least clicked /start with the bot)
-    let q = `SELECT * FROM ${params.usersTable} WHERE telegram_id=${userId}`;
-    let dbResponse = await getQuery(q);
-    let dbResponseParsed = JSON.parse(dbResponse);
-
-    // Temp
-    if (dbResponseParsed) console.log('Here1');
-
-    // User at least /start'ed with the bot and was saved in DB
-    if (dbResponseParsed.rows.length>0 && dbResponseParsed.rows[0].count !== '0') {
         // Temp
-        if (dbResponseParsed) console.log('Here2');
+        if (dbResponseParsed) console.log('Here1');
 
-        let usersState = dbResponseParsed.rows[0]['should_be'];
-
-        // If user only /start'ed (was suggested to choose a city):
-        if (usersState === 'choosing city') {
+        // User at least /start'ed with the bot and was saved in DB
+        if (dbResponseParsed.rows.length>0 && dbResponseParsed.rows[0].count !== '0') {
             // Temp
-            if (dbResponseParsed) console.log('Here3');
-            let cityOfInterest = await placeSearch(ctx.update.message.text);
+            if (dbResponseParsed) console.log('Here2');
 
-            // Check the city using GMaps API
-            if (cityOfInterest.status === 'ok') {
-                await ctx.replyWithPhoto(`https://maps.googleapis.com/maps/api/staticmap?language=en&region=US&center=${cityOfInterest.payload.latitude},${cityOfInterest.payload.longitude}&zoom=12&size=${params.imageWidth}x${params.imageHeight}&key=${GOOGLE_MAPS_API_KEY}`);
+            let usersState = dbResponseParsed.rows[0]['should_be'];
 
-                // And confirm user's choice
-                await ctx.replyWithHTML(`Do you mean <b>${cityOfInterest.payload.city}</b>?`, Markup
-                    .keyboard(['Right!', 'No - I\'ll enter another one'])
-                    .oneTime()
-                    .resize()
-                    .extra()
-                );
+            // If user only /start'ed (was suggested to choose a city):
+            if (usersState === 'choosing city') {
+                // Temp
+                if (dbResponseParsed) console.log('Here3');
+                let cityOfInterest = await placeSearch(ctx.update.message.text);
 
-                // Save user's choice (not confirmed yet) to DB and update state (from 'choosing city' to 'confirming city')
-                let q = `UPDATE ${params.usersTable} SET last_city='${ctx.update.message.text}', last_city_bounds='{"bounds":${JSON.stringify(cityOfInterest.payload.bounds)}}', should_be='confirming city' WHERE telegram_id=${userId};`;
-                let dbResponse = await getQuery(q);
-                let dbResponseParsed = JSON.parse(dbResponse);
-                console.log(dbResponseParsed);
-            } else {
-                await ctx.reply(`Sorry but I failed to determine what is "${ctx.update.message.text}". Could you please enter another city?`);
-                // State is preserved 'choosing city'
-            }
+                // Check the city using GMaps API
+                if (cityOfInterest.status === 'ok') {
+                    await ctx.replyWithPhoto(`https://maps.googleapis.com/maps/api/staticmap?language=en&region=US&center=${cityOfInterest.payload.latitude},${cityOfInterest.payload.longitude}&zoom=12&size=${params.imageWidth}x${params.imageHeight}&key=${GOOGLE_MAPS_API_KEY}`);
 
-        // City entered by user was checked using GMaps Geocoding API, user was asked to confirm if we understood him/her correctly..
-        } else if (usersState === 'confirming city') {
-            // Temp
-            if (dbResponseParsed) console.log('Here4');
-
-            // .. and answered 'Right'
-            if (ctx.update.message.text === 'Right!') {
-                await ctx.replyWithHTML(`Ok, here we go ;)\n<b>Here are the rules:</b>\n- initial score: <b>${params.initialScore}</b>\n- skip image: <b>-${params.skipImage}</b>\n- get a hint: <b>-${params.getHint}</b>\n- poor answer: <b>-${params.poorAnswer}</b>\n- fair answer: <b>+${params.fairAnswer}</b>\n- good answer: <b>+${params.goodAnswer}</b>`);
-                await ctx.replyWithHTML(`To indicate location please <b>SEND LOCATION</b> having dragged the marker to the needed place as shown below:`);
-                await ctx.replyWithPhoto('https://iuriid.github.io/public/img/gtpb-how_to_send_location.png');
-
-                // Get a random Street View image in a given coordinates square (stored in user's state)
-                let neLat = dbResponseParsed.rows[0]['last_city_bounds']['bounds']['northeast']['lat'];
-                let neLng = dbResponseParsed.rows[0]['last_city_bounds']['bounds']['northeast']['lng'];
-                let swLat = dbResponseParsed.rows[0]['last_city_bounds']['bounds']['southwest']['lat'];
-                let swLng = dbResponseParsed.rows[0]['last_city_bounds']['bounds']['southwest']['lng'];
-                let streetView = await randomStreetView(neLat, neLng, swLat, swLng);
-
-                if (streetView.status === 'ok') {
-                    await ctx.reply('And here\'s my first question:');
-                    await ctx.replyWithPhoto(streetView.payload.image);
-                    await ctx.replyWithHTML('Where is this place?\nTo indicate location please <b>SEND LOCATION</b> having dragged the marker to the needed place', Markup
-                        .keyboard(['Pass', 'Hint', 'Restart'])
+                    // And confirm user's choice
+                    await ctx.replyWithHTML(`Do you mean <b>${cityOfInterest.payload.city}</b>?`, Markup
+                        .keyboard(['Right!', 'No - I\'ll enter another one'])
                         .oneTime()
                         .resize()
                         .extra()
                     );
 
-                    // Update user's state - save the coordinates of place that was shown, state='answering'
-                    let q = `UPDATE ${params.usersTable} SET exact_location='${JSON.stringify(streetView.payload.exactLocation)}', should_be='answering' WHERE telegram_id=${userId};`;
-                    await getQuery(q);
-
-                    // Update last and top (if needed) score in DB
-                    await scoresUpdate(params.usersTable, userId, params.initialScore);
+                    // Save user's choice (not confirmed yet) to DB and update state (from 'choosing city' to 'confirming city')
+                    let q = `UPDATE ${params.usersTable} SET last_city='${ctx.update.message.text}', last_city_bounds='{"bounds":${JSON.stringify(cityOfInterest.payload.bounds)}}', should_be='confirming city' WHERE telegram_id=${userId};`;
+                    let dbResponse = await getQuery(q);
+                    let dbResponseParsed = JSON.parse(dbResponse);
+                    console.log(dbResponseParsed);
+                } else {
+                    await ctx.reply(`Sorry but I failed to determine what is "${ctx.update.message.text}". Could you please enter another city?`);
+                    // State is preserved 'choosing city'
                 }
 
-            // ... and answered 'No - I'll enter another one'
-            } else if (ctx.update.message.text === 'No - I\'ll enter another one') {
-                await ctx.reply('Ok, which one?');
+                // City entered by user was checked using GMaps Geocoding API, user was asked to confirm if we understood him/her correctly..
+            } else if (usersState === 'confirming city') {
+                // Temp
+                if (dbResponseParsed) console.log('Here4');
+
+                // .. and answered 'Right'
+                if (ctx.update.message.text === 'Right!') {
+                    await ctx.replyWithHTML(`Ok, here we go ;)\n<b>Here are the rules:</b>\n- initial score: <b>${params.initialScore}</b>\n- skip image: <b>-${params.skipImage}</b>\n- get a hint: <b>-${params.getHint}</b>\n- poor answer: <b>-${params.poorAnswer}</b>\n- fair answer: <b>+${params.fairAnswer}</b>\n- good answer: <b>+${params.goodAnswer}</b>`);
+                    await ctx.replyWithHTML(`To indicate location please <b>SEND LOCATION</b> having dragged the marker to the needed place as shown below:`);
+                    await ctx.replyWithPhoto('https://iuriid.github.io/public/img/gtpb-how_to_send_location.png');
+
+                    // Get a random Street View image in a given coordinates square (stored in user's state)
+                    let neLat = dbResponseParsed.rows[0]['last_city_bounds']['bounds']['northeast']['lat'];
+                    let neLng = dbResponseParsed.rows[0]['last_city_bounds']['bounds']['northeast']['lng'];
+                    let swLat = dbResponseParsed.rows[0]['last_city_bounds']['bounds']['southwest']['lat'];
+                    let swLng = dbResponseParsed.rows[0]['last_city_bounds']['bounds']['southwest']['lng'];
+                    let streetView = await randomStreetView(neLat, neLng, swLat, swLng);
+
+                    if (streetView.status === 'ok') {
+                        await ctx.reply('And here\'s my first question:');
+                        await ctx.replyWithPhoto(streetView.payload.image);
+                        await ctx.replyWithHTML('Where is this place?\nTo indicate location please <b>SEND LOCATION</b> having dragged the marker to the needed place', Markup
+                            .keyboard(['Pass', 'Hint', 'Restart'])
+                            .oneTime()
+                            .resize()
+                            .extra()
+                        );
+
+                        // Update user's state - save the coordinates of place that was shown, state='answering'
+                        let q = `UPDATE ${params.usersTable} SET exact_location='${JSON.stringify(streetView.payload.exactLocation)}', should_be='answering' WHERE telegram_id=${userId};`;
+                        await getQuery(q);
+
+                        // Update last and top (if needed) score in DB
+                        await scoresUpdate(params.usersTable, userId, params.initialScore);
+                    }
+
+                    // ... and answered 'No - I'll enter another one'
+                } else if (ctx.update.message.text === 'No - I\'ll enter another one') {
+                    await ctx.reply('Ok, which one?');
+
+                    // State - 'choosing city'
+                    let q = `UPDATE ${params.usersTable} SET should_be='choosing city' WHERE telegram_id=${userId};`;
+                    await getQuery(q);
+                }
+
+                // User got a question and is answering
+                // He/she may a) skip question/see answer, b) get a hint, c) send a location (try to answer), d) restart game
+            } else if (usersState === 'answering') {
+                // Temp
+                if (dbResponseParsed) console.log('Here5');
+                console.log(JSON.stringify(dbResponseParsed));
+
+                // User is answering and clicked 'Pass' - show him/her actual location, update balance
+                if (ctx.update.message.text === 'Pass') {
+                    // Temp
+                    if (dbResponseParsed) console.log('Here6');
+
+                    await ctx.reply('Ok. This place was here:');
+                    await ctx.replyWithPhoto(`https://maps.googleapis.com/maps/api/staticmap?language=en&region=US&zoom=12&size=${params.imageWidth}x${params.imageHeight}&markers=color:green|${dbResponseParsed.rows[0]['exact_location']['lat']},${dbResponseParsed.rows[0]['exact_location']['lng']}&key=${GOOGLE_MAPS_API_KEY}`);
+                    await ctx.reply(`Check it on Google Street View:\nhttps://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${dbResponseParsed.rows[0]['exact_location']['lat']},${dbResponseParsed.rows[0]['exact_location']['lng']}`);
+
+                    let balanceWas = dbResponseParsed.rows[0]['last_score'];
+                    let newBalance = dbResponseParsed.rows[0]['last_score'] - params.skipImage;
+
+                    // Update balance in DB
+                    await scoresUpdate(params.usersTable, userId, newBalance);
+
+                    // Check if user's balance is >0
+                    if (newBalance <= 0) {
+                        await ctx.replyWithHTML(`<b>Ups.. looks like you lost. Try again?</b>`, Markup
+                            .keyboard(['Restart'])
+                            .oneTime()
+                            .resize()
+                            .extra()
+                        );
+                    } else {
+                        await ctx.replyWithHTML(`Your balance is <b>${balanceWas}-${params.skipImage} = ${newBalance}</b>`, Markup
+                            .keyboard(['Next question', 'Restart'])
+                            .oneTime()
+                            .resize()
+                            .extra()
+                        );
+
+                        // Update user's state to 'next question'
+                        let q = `UPDATE ${params.usersTable} SET should_be='next question' WHERE telegram_id=${userId};`;
+                        await getQuery(q);
+                    }
+
+                    // User is answering and clicked 'Restart' - update state, ask to choose city to start
+                } else if (ctx.update.message.text === 'Restart') {
+                    // WTF? Can't understand why "ReferenceError: dbResponseParsed is not defined" in this block
+                    // while in the block 'Pass' above and 'Hint' below it's 'defined'
+                    // Might be some silly mistake...
+                    let q = `SELECT * FROM ${params.usersTable} WHERE telegram_id=${userId}`;
+                    let dbResponse = await getQuery(q);
+                    let dbResponseParsed = JSON.parse(dbResponse);
+
+                    if (dbResponseParsed.rows[0]['last_city']) {
+                        let lastCity = dbResponseParsed.rows[0]['last_city'];
+                        await ctx.replyWithHTML('Ok, let\'s start afresh. Please <b>type in a city</b>', Markup
+                            .keyboard([lastCity])
+                            .oneTime()
+                            .resize()
+                            .extra());
+                        // Otherwise - only suggest to enter city
+                    } else {
+                        await ctx.replyWithHTML('Ok, let\'s start afresh. Please <b>type in a city</b>');
+                    }
+
+                    // Update user's state to 'choosing city'
+                    q = `UPDATE ${params.usersTable} SET should_be='choosing city' WHERE telegram_id=${userId};`;
+                    await getQuery(q);
+
+                    // User is answering and clicked 'Hint' - give him/her a photo from the same place but with random heading
+                    // (supposed to be in a different direction but occasionally may be [almost] the same as original photo)
+                    // User's state remains the same ('answering')
+                } else if (ctx.update.message.text === 'Hint') {
+
+                    let balanceWas = dbResponseParsed.rows[0]['last_score'];
+                    let newBalance = dbResponseParsed.rows[0]['last_score'] - params.getHint;
+
+                    // Update balance in DB
+                    await scoresUpdate(params.usersTable, userId, newBalance);
+
+                    // Check if user's balance is >0
+                    if (newBalance<=0) {
+                        await ctx.replyWithHTML(`<b>Ups.. looks like you lost. Try again?</b>`, Markup
+                            .keyboard(['Restart'])
+                            .oneTime()
+                            .resize()
+                            .extra()
+                        );
+                    } else {
+                        await ctx.replyWithHTML(`Ok, here's another photo from the same place\nYour balance is <b>${balanceWas}-${params.getHint} = ${newBalance}</b>`);
+
+                        let randHeading = Math.random() * 360;
+                        await ctx.replyWithPhoto(`https://maps.googleapis.com/maps/api/streetview?size=${params.imageWidth}x${params.imageHeight}&location=${dbResponseParsed.rows[0]['exact_location']['lat']},${dbResponseParsed.rows[0]['exact_location']['lng']}&heading=${randHeading}&key=${GOOGLE_MAPS_API_KEY}`);
+
+                        await ctx.replyWithHTML('Where is this place?\nTo indicate location please <b>SEND LOCATION</b> having dragged the marker to the needed place', Markup
+                            .keyboard(['Pass', 'Hint', 'Restart'])
+                            .oneTime()
+                            .resize()
+                            .extra()
+                        );
+                    }
+                } else {
+                    if (!ctx.update.message.location) {
+                        await ctx.replyWithHTML('Please <b>SEND LOCATION</b> or use the menu below', Markup
+                            .keyboard(['Pass', 'Hint', 'Restart'])
+                            .oneTime()
+                            .resize()
+                            .extra()
+                        );
+                    }
+                }
+
+                // User sent location
+                if (ctx.update.message.location) {
+                    // Draw a static map image with 2 markers (actual place and user's guess) and a line between them
+                    await ctx.reply(`Ok. Here's how your answer (red marker) corresponds to actual location (green marker):`);
+                    await ctx.replyWithPhoto(`https://maps.googleapis.com/maps/api/staticmap?language=en&region=US&zoom=12&size=${params.imageWidth}x${params.imageHeight}&markers=color:green|${dbResponseParsed.rows[0]['exact_location']['lat']},${dbResponseParsed.rows[0]['exact_location']['lng']}&markers=color:red|${ctx.update.message.location.latitude},${ctx.update.message.location.longitude}&path=${dbResponseParsed.rows[0]['exact_location']['lat']},${dbResponseParsed.rows[0]['exact_location']['lng']}|${ctx.update.message.location.latitude},${ctx.update.message.location.longitude}&key=${GOOGLE_MAPS_API_KEY}`);
+                    await ctx.reply(`Here's the actual place on the Google Street View: \nhttps://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${dbResponseParsed.rows[0]['exact_location']['lat']},${dbResponseParsed.rows[0]['exact_location']['lng']}`);
+
+                    // Calculate distance between two markers
+                    const markerDistance = await distanceBetweenMarkers(dbResponseParsed.rows[0]['exact_location']['lat'], dbResponseParsed.rows[0]['exact_location']['lng'], ctx.update.message.location.latitude, ctx.update.message.location.longitude);
+                    let distanceVerdict = '';
+                    if (markerDistance<1) {
+                        distanceVerdict = `only about ${Math.round(markerDistance * 1000)} meters`;
+                    } else {
+                        distanceVerdict = `about ${Math.round(markerDistance * 100) / 100} km`
+                    }
+
+                    // Results will be graded using ratio of actual distance between points (km) and 'the size of the city'
+                    // (decided to use diagonal between the northeast and southwest points/bounds for the city)
+                    let cityDistance = await distanceBetweenMarkers(dbResponseParsed.rows[0]['last_city_bounds']['bounds']['northeast']['lat'], dbResponseParsed.rows[0]['last_city_bounds']['bounds']['northeast']['lng'], dbResponseParsed.rows[0]['last_city_bounds']['bounds']['southwest']['lat'], dbResponseParsed.rows[0]['last_city_bounds']['bounds']['southwest']['lng']);
+
+                    let grade = 0;
+                    let summary = '';
+
+                    if (markerDistance/cityDistance < params.goodAnswerLowerLimit) { // if distance between user's marker and actual place is <10% of city diagonal (km) - good answer, +5
+                        grade = 5;
+                        summary = 'Excellent answer!';
+                    }  else if (markerDistance/cityDistance >= params.goodAnswerLowerLimit && markerDistance/cityDistance < params.fairAnswerLowerLimit) { // if distance between user's marker and actual place is >=10% and <50% of city diagonal (km) - fair answer, +2
+                        grade = 2;
+                        summary = 'Not bad but could be better ;)';
+                    } else if (markerDistance/cityDistance >= params.fairAnswerLowerLimit) { // if distance between user's marker and actual place is >=50% of city diagonal (km), -2
+                        grade = -2;
+                        summary = 'Missed! ;)';
+                    }
+
+                    let balanceWas = dbResponseParsed.rows[0]['last_score'];
+                    let newBalance = dbResponseParsed.rows[0]['last_score'] + grade;
+                    // Update balance in DB
+                    await scoresUpdate(params.usersTable, userId, newBalance);
+
+                    // Check if user's balance is >0
+                    if (newBalance<=0) {
+                        await ctx.replyWithHTML(`<b>Ups.. looks like you lost. Try again?</b>`, Markup
+                            .keyboard(['Restart'])
+                            .oneTime()
+                            .resize()
+                            .extra()
+                        );
+                    } else {
+                        await ctx.replyWithHTML(`Straight distance between the markers is ${distanceVerdict}\n${summary}\nYou balance is: <b>${balanceWas}${grade<0 ? '' : '+'}${grade} = ${newBalance}</b>`, Markup
+                            .keyboard(['Next question', 'Restart'])
+                            .oneTime()
+                            .resize()
+                            .extra());
+
+
+                        // Update user's state to 'next question'
+                        let q = `UPDATE ${params.usersTable} SET exact_location='${JSON.stringify({})}', should_be='next question' WHERE telegram_id=${userId};`;
+                        let dbResponse = await getQuery(q);
+                        let dbResponseParsed = JSON.parse(dbResponse);
+                        console.log(dbResponseParsed);
+                    }
+                }
+
+                // User either passed a question or answered it and clicked the button 'Next question'
+            } else if (usersState === 'next question') {
+                if (ctx.update.message.text === 'Restart') {
+                    let q = `SELECT * FROM ${params.usersTable} WHERE telegram_id=${userId}`;
+                    let dbResponse = await getQuery(q);
+                    let dbResponseParsed = JSON.parse(dbResponse);
+                    if (dbResponseParsed.rows[0].count !== '0') {
+                        let lastCity = dbResponseParsed.rows[0].last_city;
+                        await ctx.replyWithHTML('Ok, let\'s start afresh. Please <b>type in a city</b>', Markup
+                            .keyboard([lastCity])
+                            .oneTime()
+                            .resize()
+                            .extra());
+                    }
+                    // Update user's state to 'choosing city'
+                    q = `UPDATE ${params.usersTable} SET should_be='choosing city' WHERE telegram_id=${userId};`;
+                    await getQuery(q);
+
+                } else if (ctx.update.message.text === 'Next question') {
+                    // Get a random Street View image in a given coordinates square (stored in user's state)
+                    let neLat = dbResponseParsed.rows[0]['last_city_bounds']['bounds']['northeast']['lat'];
+                    let neLng = dbResponseParsed.rows[0]['last_city_bounds']['bounds']['northeast']['lng'];
+                    let swLat = dbResponseParsed.rows[0]['last_city_bounds']['bounds']['southwest']['lat'];
+                    let swLng = dbResponseParsed.rows[0]['last_city_bounds']['bounds']['southwest']['lng'];
+                    let streetView = await randomStreetView(neLat, neLng, swLat, swLng);
+
+                    if (streetView.status === 'ok') {
+                        await ctx.replyWithPhoto(streetView.payload.image);
+
+                        await ctx.replyWithHTML('Where is this place?\nTo indicate location please <b>SEND LOCATION</b> having dragged the marker to the needed place', Markup
+                            .keyboard(['Pass', 'Hint', 'Restart'])
+                            .oneTime()
+                            .resize()
+                            .extra()
+                        );
+
+                        // Update user's state - save the coordinates of place that was shown, state='answering'
+                        let q = `UPDATE ${params.usersTable} SET exact_location='${JSON.stringify(streetView.payload.exactLocation)}', should_be='answering' WHERE telegram_id=${userId};`;
+                        await getQuery(q);
+                    }
+                }
+
+                // This will be our Default Fallback intent for already contacted users
+            } else {
+                ctx.replyWithHTML('To start please <b>type in a city</b>');
 
                 // State - 'choosing city'
                 let q = `UPDATE ${params.usersTable} SET should_be='choosing city' WHERE telegram_id=${userId};`;
                 await getQuery(q);
             }
-
-        // User got a question and is answering
-        // He/she may a) skip question/see answer, b) get a hint, c) send a location (try to answer), d) restart game
-        } else if (usersState === 'answering') {
-            // Temp
-            if (dbResponseParsed) console.log('Here5');
-            console.log(JSON.stringify(dbResponseParsed));
-
-            // User is answering and clicked 'Pass' - show him/her actual location, update balance
-            if (ctx.update.message.text === 'Pass') {
-                // Temp
-                if (dbResponseParsed) console.log('Here6');
-
-                await ctx.reply('Ok. This place was here:');
-                await ctx.replyWithPhoto(`https://maps.googleapis.com/maps/api/staticmap?language=en&region=US&zoom=12&size=${params.imageWidth}x${params.imageHeight}&markers=color:green|${dbResponseParsed.rows[0]['exact_location']['lat']},${dbResponseParsed.rows[0]['exact_location']['lng']}&key=${GOOGLE_MAPS_API_KEY}`);
-                await ctx.reply(`Check it on Google Street View:\nhttps://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${dbResponseParsed.rows[0]['exact_location']['lat']},${dbResponseParsed.rows[0]['exact_location']['lng']}`);
-
-                let balanceWas = dbResponseParsed.rows[0]['last_score'];
-                let newBalance = dbResponseParsed.rows[0]['last_score'] - params.skipImage;
-
-                // Update balance in DB
-                await scoresUpdate(params.usersTable, userId, newBalance);
-
-                // Check if user's balance is >0
-                if (newBalance <= 0) {
-                    await ctx.replyWithHTML(`<b>Ups.. looks like you lost. Try again?</b>`, Markup
-                        .keyboard(['Restart'])
-                        .oneTime()
-                        .resize()
-                        .extra()
-                    );
-                } else {
-                    await ctx.replyWithHTML(`Your balance is <b>${balanceWas}-${params.skipImage} = ${newBalance}</b>`, Markup
-                        .keyboard(['Next question', 'Restart'])
-                        .oneTime()
-                        .resize()
-                        .extra()
-                    );
-
-                    // Update user's state to 'next question'
-                    let q = `UPDATE ${params.usersTable} SET should_be='next question' WHERE telegram_id=${userId};`;
-                    await getQuery(q);
-                }
-
-            // User is answering and clicked 'Restart' - update state, ask to choose city to start
-            } else if (ctx.update.message.text === 'Restart') {
-                // WTF? Can't understand why "ReferenceError: dbResponseParsed is not defined" in this block
-                // while in the block 'Pass' above and 'Hint' below it's 'defined'
-                // Might be some silly mistake...
-                let q = `SELECT * FROM ${params.usersTable} WHERE telegram_id=${userId}`;
-                let dbResponse = await getQuery(q);
-                let dbResponseParsed = JSON.parse(dbResponse);
-                if (dbResponseParsed) console.log('Here7');
-
-                if (dbResponseParsed.rows[0]['last_city']) {
-                    let lastCity = dbResponseParsed.rows[0]['last_city'];
-                    await ctx.replyWithHTML('Ok, let\'s start afresh. Please <b>type in a city</b>', Markup
-                        .keyboard([lastCity])
-                        .oneTime()
-                        .resize()
-                        .extra());
-                    // Otherwise - only suggest to enter city
-                } else {
-                    await ctx.replyWithHTML('Ok, let\'s start afresh. Please <b>type in a city</b>');
-                }
-
-                // Update user's state to 'choosing city'
-                q = `UPDATE ${params.usersTable} SET should_be='choosing city' WHERE telegram_id=${userId};`;
-                await getQuery(q);
-
-            // User is answering and clicked 'Hint' - give him/her a photo from the same place but with random heading
-            // (supposed to be in a different direction but occasionally may be [almost] the same as original photo)
-            // User's state remains the same ('answering')
-            } else if (ctx.update.message.text === 'Hint') {
-                if (dbResponseParsed) console.log('Here8');
-
-                let balanceWas = dbResponseParsed.rows[0]['last_score'];
-                let newBalance = dbResponseParsed.rows[0]['last_score'] - params.getHint;
-
-                // Update balance in DB
-                await scoresUpdate(params.usersTable, userId, newBalance);
-
-                // Check if user's balance is >0
-                if (newBalance<=0) {
-                    await ctx.replyWithHTML(`<b>Ups.. looks like you lost. Try again?</b>`, Markup
-                        .keyboard(['Restart'])
-                        .oneTime()
-                        .resize()
-                        .extra()
-                    );
-                } else {
-                    await ctx.replyWithHTML(`Ok, here's another photo from the same place\nYour balance is <b>${balanceWas}-${params.getHint} = ${newBalance}</b>`);
-
-                    let randHeading = Math.random() * 360;
-                    await ctx.replyWithPhoto(`https://maps.googleapis.com/maps/api/streetview?size=${params.imageWidth}x${params.imageHeight}&location=${dbResponseParsed.rows[0]['exact_location']['lat']},${dbResponseParsed.rows[0]['exact_location']['lng']}&heading=${randHeading}&key=${GOOGLE_MAPS_API_KEY}`);
-
-                    await ctx.replyWithHTML('Where is this place?\nTo indicate location please <b>SEND LOCATION</b> having dragged the marker to the needed place', Markup
-                        .keyboard(['Pass', 'Hint', 'Restart'])
-                        .oneTime()
-                        .resize()
-                        .extra()
-                    );
-                }
-            } else {
-                if (!ctx.update.message.location) {
-                    await ctx.replyWithHTML('Please <b>SEND LOCATION</b> or use the menu below', Markup
-                        .keyboard(['Pass', 'Hint', 'Restart'])
-                        .oneTime()
-                        .resize()
-                        .extra()
-                    );
-                }
-            }
-
-            // User sent location
-            if (ctx.update.message.location) {
-                // Draw a static map image with 2 markers (actual place and user's guess) and a line between them
-                await ctx.reply(`Ok. Here's how your answer (red marker) corresponds to actual location (green marker):`);
-                await ctx.replyWithPhoto(`https://maps.googleapis.com/maps/api/staticmap?language=en&region=US&zoom=12&size=${params.imageWidth}x${params.imageHeight}&markers=color:green|${dbResponseParsed.rows[0]['exact_location']['lat']},${dbResponseParsed.rows[0]['exact_location']['lng']}&markers=color:red|${ctx.update.message.location.latitude},${ctx.update.message.location.longitude}&path=${dbResponseParsed.rows[0]['exact_location']['lat']},${dbResponseParsed.rows[0]['exact_location']['lng']}|${ctx.update.message.location.latitude},${ctx.update.message.location.longitude}&key=${GOOGLE_MAPS_API_KEY}`);
-                await ctx.reply(`Here's the actual place on the Google Street View: \nhttps://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${dbResponseParsed.rows[0]['exact_location']['lat']},${dbResponseParsed.rows[0]['exact_location']['lng']}`);
-
-                // Calculate distance between two markers
-                const markerDistance = await distanceBetweenMarkers(dbResponseParsed.rows[0]['exact_location']['lat'], dbResponseParsed.rows[0]['exact_location']['lng'], ctx.update.message.location.latitude, ctx.update.message.location.longitude);
-                let distanceVerdict = '';
-                if (markerDistance<1) {
-                    distanceVerdict = `only about ${Math.round(markerDistance * 1000)} meters`;
-                } else {
-                    distanceVerdict = `about ${Math.round(markerDistance * 100) / 100} km`
-                }
-
-                // Results will be graded using ratio of actual distance between points (km) and 'the size of the city'
-                // (decided to use diagonal between the northeast and southwest points/bounds for the city)
-                let cityDistance = await distanceBetweenMarkers(dbResponseParsed.rows[0]['last_city_bounds']['bounds']['northeast']['lat'], dbResponseParsed.rows[0]['last_city_bounds']['bounds']['northeast']['lng'], dbResponseParsed.rows[0]['last_city_bounds']['bounds']['southwest']['lat'], dbResponseParsed.rows[0]['last_city_bounds']['bounds']['southwest']['lng']);
-
-                let grade = 0;
-                let summary = '';
-
-                if (markerDistance/cityDistance < params.goodAnswerLowerLimit) { // if distance between user's marker and actual place is <10% of city diagonal (km) - good answer, +5
-                    grade = 5;
-                    summary = 'Excellent answer!';
-                }  else if (markerDistance/cityDistance >= params.goodAnswerLowerLimit && markerDistance/cityDistance < params.fairAnswerLowerLimit) { // if distance between user's marker and actual place is >=10% and <50% of city diagonal (km) - fair answer, +2
-                    grade = 2;
-                    summary = 'Not bad but could be better ;)';
-                } else if (markerDistance/cityDistance >= params.fairAnswerLowerLimit) { // if distance between user's marker and actual place is >=50% of city diagonal (km), -2
-                    grade = -2;
-                    summary = 'Missed! ;)';
-                }
-
-                let balanceWas = dbResponseParsed.rows[0]['last_score'];
-                let newBalance = dbResponseParsed.rows[0]['last_score'] + grade;
-                // Update balance in DB
-                await scoresUpdate(params.usersTable, userId, newBalance);
-
-                // Check if user's balance is >0
-                if (newBalance<=0) {
-                    await ctx.replyWithHTML(`<b>Ups.. looks like you lost. Try again?</b>`, Markup
-                        .keyboard(['Restart'])
-                        .oneTime()
-                        .resize()
-                        .extra()
-                    );
-                } else {
-                    await ctx.replyWithHTML(`Straight distance between the markers is ${distanceVerdict}\n${summary}\nYou balance is: <b>${balanceWas}${grade<0 ? '' : '+'}${grade} = ${newBalance}</b>`, Markup
-                        .keyboard(['Next question', 'Restart'])
-                        .oneTime()
-                        .resize()
-                        .extra());
-
-
-                    // Update user's state to 'next question'
-                    let q = `UPDATE ${params.usersTable} SET exact_location='${JSON.stringify({})}', should_be='next question' WHERE telegram_id=${userId};`;
-                    let dbResponse = await getQuery(q);
-                    let dbResponseParsed = JSON.parse(dbResponse);
-                    console.log(dbResponseParsed);
-                }
-            }
-
-        // User either passed a question or answered it and clicked the button 'Next question'
-        } else if (usersState === 'next question') {
-            if (ctx.update.message.text === 'Restart') {
-                let q = `SELECT * FROM ${params.usersTable} WHERE telegram_id=${userId}`;
-                let dbResponse = await getQuery(q);
-                let dbResponseParsed = JSON.parse(dbResponse);
-                if (dbResponseParsed.rows[0].count !== '0') {
-                    let lastCity = dbResponseParsed.rows[0].last_city;
-                    await ctx.replyWithHTML('Ok, let\'s start afresh. Please <b>type in a city</b>', Markup
-                        .keyboard([lastCity])
-                        .oneTime()
-                        .resize()
-                        .extra());
-                }
-                // Update user's state to 'choosing city'
-                q = `UPDATE ${params.usersTable} SET should_be='choosing city' WHERE telegram_id=${userId};`;
-                await getQuery(q);
-
-            } else if (ctx.update.message.text === 'Next question') {
-                // Get a random Street View image in a given coordinates square (stored in user's state)
-                let neLat = dbResponseParsed.rows[0]['last_city_bounds']['bounds']['northeast']['lat'];
-                let neLng = dbResponseParsed.rows[0]['last_city_bounds']['bounds']['northeast']['lng'];
-                let swLat = dbResponseParsed.rows[0]['last_city_bounds']['bounds']['southwest']['lat'];
-                let swLng = dbResponseParsed.rows[0]['last_city_bounds']['bounds']['southwest']['lng'];
-                let streetView = await randomStreetView(neLat, neLng, swLat, swLng);
-
-                if (streetView.status === 'ok') {
-                    await ctx.replyWithPhoto(streetView.payload.image);
-
-                    await ctx.replyWithHTML('Where is this place?\nTo indicate location please <b>SEND LOCATION</b> having dragged the marker to the needed place', Markup
-                        .keyboard(['Pass', 'Hint', 'Restart'])
-                        .oneTime()
-                        .resize()
-                        .extra()
-                    );
-
-                    // Update user's state - save the coordinates of place that was shown, state='answering'
-                    let q = `UPDATE ${params.usersTable} SET exact_location='${JSON.stringify(streetView.payload.exactLocation)}', should_be='answering' WHERE telegram_id=${userId};`;
-                    await getQuery(q);
-                }
-            }
-
-        // This will be our Default Fallback intent for already contacted users
-        } else {
-            ctx.replyWithHTML('To start please <b>type in a city</b>');
-
-            // State - 'choosing city'
-            let q = `UPDATE ${params.usersTable} SET should_be='choosing city' WHERE telegram_id=${userId};`;
-            await getQuery(q);
         }
+    } catch(error) {
+        console.log(`>> Main conversation flow handler: ${error}`);
+        ctx.replyWithHTML('Looks like something wrong has happened.. Could you please try to <b>/restart</b> the bot? Thanks and please accept my apologies');
     }
 });
 
@@ -413,12 +415,8 @@ bot.on('message', async ctx => {
 // --------------------- AWS Lambda handler function ---------------------------------------------------------------- //
 // https://github.com/telegraf/telegraf/issues/129
 exports.handler = (event, context, callback) => {
-    const tmp = JSON.parse(event.body); // get data passed to us
-    bot.handleUpdate(tmp); // make Telegraf process that data
-    return callback(null, { // return something for webhook, so it doesn't try to send same stuff again
-        statusCode: 200,
-        body: '',
-    });
+    bot.handleUpdate(JSON.parse(event.body)); // make Telegraf process that data
+    return callback(null, { statusCode: 200, body: JSON.stringify({ message: 'OK' }) });
 };
 
 
