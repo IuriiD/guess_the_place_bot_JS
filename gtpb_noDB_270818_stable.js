@@ -147,7 +147,7 @@ bot.on('message', async ctx => {
                         .extra()
                     );
                 } else {
-                    await ctx.replyWithHTML(`Your balance is <b>${balanceWas} - ${params.skipImage} = ${newBalance}</b>`, Markup
+                    await ctx.replyWithHTML(`Your balance is <b>${balanceWas}-${params.skipImage} = ${newBalance}</b>`, Markup
                         .keyboard(['Next question', 'Restart'])
                         .oneTime()
                         .resize()
@@ -205,7 +205,8 @@ bot.on('message', async ctx => {
             if (ctx.update.message.location) {
                 // Draw a static map image with 2 markers (actual place and user's guess) and a line between them
                 await ctx.reply(`Ok. Here's how your answer (red marker) corresponds to actual location (green marker):`);
-                await ctx.replyWithPhoto(`https://maps.googleapis.com/maps/api/staticmap?language=en&region=US&zoom=12&size=${params.imageWidth}x${params.imageHeight}&markers=color:green|${state[userId]['exactLocation']['lat']},${state[userId]['exactLocation']['lng']}&markers=color:red|${ctx.update.message.location.latitude},${ctx.update.message.location.longitude}&path=${state[userId]['exactLocation']['lat']},${state[userId]['exactLocation']['lng']}|${ctx.update.message.location.latitude},${ctx.update.message.location.longitude}&key=${GOOGLE_MAPS_API_KEY}`);
+                await ctx.replyWithPhoto(`https://maps.googleapis.com/maps/api/staticmap?language=en&region=US&size=${params.imageWidth}x${params.imageHeight}&markers=color:green|${state[userId]['exactLocation']['lat']},${state[userId]['exactLocation']['lng']}&markers=color:red|${ctx.update.message.location.latitude},${ctx.update.message.location.longitude}&path=${state[userId]['exactLocation']['lat']},${state[userId]['exactLocation']['lng']}|${ctx.update.message.location.latitude},${ctx.update.message.location.longitude}&key=${GOOGLE_MAPS_API_KEY}`);
+                //await ctx.replyWithPhoto(`https://maps.googleapis.com/maps/api/staticmap?language=en&region=US&zoom=12&size=${params.imageWidth}x${params.imageHeight}&markers=color:green|${state[userId]['exactLocation']['lat']},${state[userId]['exactLocation']['lng']}&markers=color:red|${ctx.update.message.location.latitude},${ctx.update.message.location.longitude}&path=${state[userId]['exactLocation']['lat']},${state[userId]['exactLocation']['lng']}|${ctx.update.message.location.latitude},${ctx.update.message.location.longitude}&key=${GOOGLE_MAPS_API_KEY}`);
                 await ctx.reply(`Here's the actual place on the Google Street View: \nhttps://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${state[userId].exactLocation.lat},${state[userId].exactLocation.lng}`);
 
                 // Calculate distance between two markers
@@ -303,12 +304,8 @@ bot.on('message', async ctx => {
 // --------------------- AWS Lambda handler function ---------------------------------------------------------------- //
 // https://github.com/telegraf/telegraf/issues/129
 exports.handler = (event, context, callback) => {
-    const tmp = JSON.parse(event.body); // get data passed to us
-    bot.handleUpdate(tmp); // make Telegraf process that data
-    return callback(null, { // return something for webhook, so it doesn't try to send same stuff again
-        statusCode: 200,
-        body: '',
-    });
+    bot.handleUpdate(JSON.parse(event.body)); // make Telegraf process that data
+    return callback(null, { statusCode: 200, body: JSON.stringify({ message: 'OK' }) });
 };
 
 
