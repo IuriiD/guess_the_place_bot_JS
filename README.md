@@ -22,7 +22,7 @@
 <p>
     Some video of using the bot:
     <br>
-    [![GuessThePlaceBot - example of using](http://img.youtube.com/vi/wnC-QVKlDUw/0.jpg)](http://www.youtube.com/watch?v=wnC-QVKlDUw "GuessThePlaceBot - example of using")
+    <a href="https://www.youtube.com/watch?v=wnC-QVKlDUw&t=3s" target="_blank"><img src="https://iuriid.github.io/public/img/gtpb-6.jpg" class="img-fluid img-thumbnail"></a>
 </p>
 
 <p>
