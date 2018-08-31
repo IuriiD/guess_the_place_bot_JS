@@ -1,5 +1,5 @@
-# GuessThePlaceBot / Do you know your city well? Can you recognize its places by street view photos? Play a game with <a href="https://t.me/GuessThePlaceBot" targer="_blank">GuessThePlaceBot</b> and check that ;)
-
+# GuessThePlaceBot
+<b>Do you know your city well? Can you recognize its places by street view photos? Play a game with <a href="https://t.me/GuessThePlaceBot" targer="_blank">GuessThePlaceBot</a> and check that ;)</b>
 <p>
     <a href="https://t.me/GuessThePlaceBot" target="_blank"><img src="https://iuriid.github.io/public/img/tryInTelegram.jpg" class="img-fluid img-thumbnail" style="max-width: 334px"></a>
 </p>
@@ -22,7 +22,7 @@
 <p>
     Some video of using the bot:
     <br>
-    <iframe width="640" height="480" src="https://www.youtube.com/embed/wnC-QVKlDUw" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe>
+    [![GuessThePlaceBot - example of using](http://img.youtube.com/vi/wnC-QVKlDUw/0.jpg)](http://www.youtube.com/watch?v=wnC-QVKlDUw "GuessThePlaceBot - example of using")
 </p>
 
 <p>
