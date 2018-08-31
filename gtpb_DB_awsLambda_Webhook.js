@@ -597,6 +597,7 @@ async function getQuery(q) {
             database: process.env.rdsDB,
             password: process.env.postgreSQLKey,
             port: process.env.rdsPort,
+            ssl: true
         });
 
         client.connect(function(err) {

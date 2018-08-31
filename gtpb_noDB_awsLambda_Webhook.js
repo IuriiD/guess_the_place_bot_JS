@@ -27,12 +27,12 @@ bot.command(['start', 'restart'], async ctx => {
     const userId = ctx.from.id;
 
     if (!state[userId]) {
-        await ctx.reply(`Hi, ${username}! I'm a GuessThePlaceBot`);
+        await ctx.replyWithHTML(`Hi, <b>${username}</b>! I'm a GuessThePlaceBot`);
         await ctx.replyWithHTML('Do you know your city well? \nWill you recognize a place by photo?');
     }
 
     //await ctx.replyWithHTML('To start please type in a city. \nYou can also indicate a city on map by sending a location type attachment');
-    await ctx.replyWithHTML('To start please type in a city');
+    await ctx.replyWithHTML('To start please <b>type in a city</b>');
 
     // let's remember that user with given ID was prompted to choose a city
     state[userId] = {'should be': 'choosing city'};
@@ -160,7 +160,7 @@ bot.on('message', async ctx => {
 
                 // User is answering and clicked 'Restart' - update state, ask to choose city to start
                 } else if (ctx.update.message.text === 'Restart') {
-                    await ctx.reply('Ok, let\'s start afresh. Please type in a city');
+                    await ctx.replyWithHTML('Ok, let\'s start afresh. Please <b>type in a city</b>');
                     state[userId] = {'should be': 'choosing city'};
 
                 // User is answering and clicked 'Hint' - give him/her a photo from the same place but with random heading
@@ -285,7 +285,7 @@ bot.on('message', async ctx => {
 
             // This will be our Default Fallback intent for already contacted users
             } else {
-                ctx.replyWithHTML('To start please type in a city');
+                ctx.replyWithHTML('To start please <b>type in a city</b>');
                 state[userId]['should be'] = 'choosing city';
             }
         } else {
@@ -294,7 +294,7 @@ bot.on('message', async ctx => {
             const username = ctx.from.first_name;
             await ctx.reply(`Hi, ${username}! I'm a GuessThePlaceBot`);
             await ctx.replyWithHTML('Do you know your city well? \nWill you recognize a place by photo?');
-            ctx.replyWithHTML('To start please type in a city');
+            ctx.replyWithHTML('To start please <b>type in a city</b>');
             state[userId] = {'should be': 'choosing city'};
         }
 
